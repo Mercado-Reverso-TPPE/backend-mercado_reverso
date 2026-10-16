@@ -1,0 +1,69 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: quero-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quero}
+      POSTGRES_USER: ${POSTGRES_USER:-quero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quero}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quero} -d ${POSTGRES_DB:-quero}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build:
+      context: ./backend
+    container_name: quero-backend
+    environment:
+      DJANGO_SETTINGS_MODULE: quero.settings.dev
+      SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-change-me}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quero}:${POSTGRES_PASSWORD:-quero}@db:5432/${POSTGRES_DB:-quero}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      RAIO_PADRAO_KM: ${RAIO_PADRAO_KM:-20}
+      RAIO_MAXIMO_KM: ${RAIO_MAXIMO_KM:-200}
+      LOGIN_MAX_TENTATIVAS: ${LOGIN_MAX_TENTATIVAS:-5}
+      LOGIN_BLOQUEIO_MINUTOS: ${LOGIN_BLOQUEIO_MINUTOS:-15}
+      GEOCODER_URL: ${GEOCODER_URL:-https://nominatim.openstreetmap.org}
+      GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:-Quero/1.0 (geocodificacao de cadastro)}
+      PASSWORD_RESET_URL: ${PASSWORD_RESET_URL:-http://localhost:3000/redefinir-senha}
+      PASSWORD_RESET_TIMEOUT: ${PASSWORD_RESET_TIMEOUT:-3600}
+      EMAIL_CHANGE_URL: ${EMAIL_CHANGE_URL:-http://localhost:3000/confirmar-email}
+      EMAIL_CHANGE_TIMEOUT: ${EMAIL_CHANGE_TIMEOUT:-86400}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_PORT: ${EMAIL_PORT:-25}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-false}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL:-Quero. <nao-responda@quero.local>}"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: quero-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@quero.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  pgadmin_data:
