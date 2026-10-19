@@ -26,6 +26,8 @@ class AnuncioSerializer(serializers.ModelSerializer):
     categoria = serializers.SlugRelatedField(slug_field="slug", queryset=Categoria.objects.filter(ativa=True))
     categoria_nome = serializers.CharField(source="categoria.nome", read_only=True)
     ofertas_recebidas = serializers.IntegerField(source="ofertas_ativas", read_only=True, default=0)
+    cidade = serializers.CharField(source="comprador.cidade", read_only=True)
+    uf = serializers.CharField(source="comprador.uf", read_only=True)
 
     class Meta:
         model = Anuncio

@@ -2,10 +2,11 @@ from django.contrib.auth import password_validation
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Localizacao, Usuario
+from .models import Usuario
 from .services import acesso_bloqueado, atualizar_perfil, limpar_falhas_login, registrar_falha_login
 from .geocoding import localizar as geocodificar
 
@@ -25,41 +26,36 @@ class LoginSerializer(TokenObtainPairSerializer):
         limpar_falhas_login(email)
         return dados
 
-class LocalizacaoSerializer(serializers.ModelSerializer):
+class LocalizacaoSerializer(serializers.Serializer):
+    cep = serializers.CharField(required=False, allow_blank=True, max_length=9)
+    cidade = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    uf = serializers.CharField(required=False, allow_blank=True, max_length=2)
     longitude = serializers.FloatField(write_only=True, required=False)
     latitude = serializers.FloatField(write_only=True, required=False)
 
-    class Meta:
-        model = Localizacao
-        fields = ("cep", "cidade", "uf", "atualizada_em", "longitude", "latitude")
-        read_only_fields = ("atualizada_em",)
-
     def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data["longitude"] = instance.ponto.x
-        data["latitude"] = instance.ponto.y
-        return data
+        if instance.ponto is None:
+            return None
+        return {
+            "cep": instance.cep,
+            "cidade": instance.cidade,
+            "uf": instance.uf,
+            "longitude": instance.ponto.x,
+            "latitude": instance.ponto.y,
+        }
 
     def validate(self, attrs):
         lon = attrs.pop("longitude", None)
         lat = attrs.pop("latitude", None)
         if (lon is None) != (lat is None):
             raise serializers.ValidationError("Informe latitude e longitude em conjunto.")
-        if lon is None:
-            if self.instance is None:
-                if not attrs.get("cep") and not attrs.get("cidade"):
-                    raise serializers.ValidationError("Informe coordenadas, CEP ou cidade para definir a localização.")
-                attrs["_geocodificar"] = True
-            else:
-                endereco_novo = any(attrs.get(campo) and attrs.get(campo) != getattr(self.instance, campo) for campo in ("cep", "cidade", "uf"))
-                if endereco_novo:
-                    attrs["_geocodificar"] = True
-                else:
-                    attrs["_ponto"] = self.instance.ponto
-        elif not (-180 <= lon <= 180 and -90 <= lat <= 90):
+        if lon is not None and not (-180 <= lon <= 180 and -90 <= lat <= 90):
             raise serializers.ValidationError("Coordenadas inválidas.")
-        else:
-            attrs["_ponto"] = Point(lon, lat, srid=4326)
+        attrs["localizacao"] = {
+            **attrs,
+            "_ponto": Point(lon, lat, srid=4326) if lon is not None else None,
+            "_geocodificar": lon is None and bool(attrs.get("cep") or attrs.get("cidade")),
+        }
         return attrs
 
 class CadastroSerializer(serializers.ModelSerializer):
@@ -99,11 +95,16 @@ class CadastroSerializer(serializers.ModelSerializer):
             loc.update({"longitude": ponto.x, "latitude": ponto.y, "cep": cep, "cidade": cidade, "uf": uf})
         user = Usuario.objects.create_user(password=password, **validated_data)
         if "longitude" in loc and "latitude" in loc:
-            Localizacao.objects.create(usuario=user, ponto=Point(loc["longitude"], loc["latitude"], srid=4326), cep=loc.get("cep", ""), cidade=loc.get("cidade", ""), uf=loc.get("uf", "").upper())
+            user.ponto = Point(loc["longitude"], loc["latitude"], srid=4326)
+            user.cep = loc.get("cep", "")
+            user.cidade = loc.get("cidade", "")
+            user.uf = loc.get("uf", "").upper()
+            user.localizacao_atualizada_em = timezone.now()
+            user.save(update_fields=["ponto", "cep", "cidade", "uf", "localizacao_atualizada_em"])
         return user
 
 class PerfilSerializer(serializers.ModelSerializer):
-    localizacao = LocalizacaoSerializer(required=False)
+    localizacao = LocalizacaoSerializer(required=False, source="*")
 
     class Meta:
         model = Usuario

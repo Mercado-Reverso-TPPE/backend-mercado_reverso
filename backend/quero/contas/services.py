@@ -1,7 +1,6 @@
 import hashlib
 from datetime import timedelta
 import logging
-import secrets
 from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
 from django.conf import settings
@@ -9,13 +8,15 @@ from django.contrib.auth import password_validation
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
+from django.core.cache import cache
+from django.core import signing
 from django.db import transaction
 from django.utils.encoding import force_str
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 
-from .models import AlteracaoEmailPendente, Localizacao, TentativaLogin, Usuario
+from .models import Usuario
 
 logger = logging.getLogger(__name__)
 
@@ -26,30 +27,39 @@ def _hash_email(email):
 
 
 def acesso_bloqueado(email):
-    tentativa = TentativaLogin.objects.filter(email_hash=_hash_email(email)).first()
-    return tentativa is not None and tentativa.esta_bloqueada
+    chave = f"login:bloqueado:{_hash_email(email)}"
+    bloqueado_ate = cache.get(chave)
+    if bloqueado_ate is None:
+        return False
+    if bloqueado_ate > timezone.now():
+        return True
+    cache.delete(chave)
+    cache.delete(f"login:falhas:{_hash_email(email)}")
+    return False
 
 
-@transaction.atomic
 def registrar_falha_login(email):
-    chave = _hash_email(email)
-    tentativa, _ = TentativaLogin.objects.get_or_create(email_hash=chave)
-    tentativa = TentativaLogin.objects.select_for_update().get(email_hash=chave)
-    agora = timezone.now()
+    hash_email = _hash_email(email)
+    chave_falhas = f"login:falhas:{hash_email}"
+    chave_bloqueio = f"login:bloqueado:{hash_email}"
+    if acesso_bloqueado(email):
+        return
+    cache.add(chave_falhas, 0, timeout=None)
+    try:
+        falhas = cache.incr(chave_falhas)
+    except ValueError:
+        cache.set(chave_falhas, 1, timeout=None)
+        falhas = 1
+    if falhas >= settings.LOGIN_MAX_TENTATIVAS:
+        prazo = timedelta(minutes=settings.LOGIN_BLOQUEIO_MINUTOS)
+        cache.set(chave_bloqueio, timezone.now() + prazo, timeout=int(prazo.total_seconds()))
+        cache.delete(chave_falhas)
 
-    if tentativa.bloqueado_ate and tentativa.bloqueado_ate <= agora:
-        tentativa.falhas = 0
-        tentativa.bloqueado_ate = None
 
-    tentativa.falhas += 1
-    if tentativa.falhas >= settings.LOGIN_MAX_TENTATIVAS:
-        tentativa.bloqueado_ate = agora + timedelta(minutes=settings.LOGIN_BLOQUEIO_MINUTOS)
-    tentativa.save(update_fields=["falhas", "bloqueado_ate", "atualizado_em"])
-
-
-@transaction.atomic
 def limpar_falhas_login(email):
-    TentativaLogin.objects.filter(email_hash=_hash_email(email)).delete()
+    hash_email = _hash_email(email)
+    cache.delete(f"login:falhas:{hash_email}")
+    cache.delete(f"login:bloqueado:{hash_email}")
 
 
 def solicitar_redefinicao_senha(email):
@@ -94,50 +104,61 @@ def atualizar_perfil(*, usuario, dados):
     localizacao = dados.pop("localizacao", None)
     ponto = localizacao.pop("_ponto", None) if localizacao else None
     precisa_geocodificar = localizacao.pop("_geocodificar", False) if localizacao else False
+    localizacao_mudou = False
 
-    if precisa_geocodificar:
-        from .geocoding import localizar
+    if localizacao is not None:
+        alterou_endereco = any(
+            valor != getattr(usuario, campo)
+            for campo, valor in localizacao.items()
+            if campo in ("cep", "cidade", "uf")
+        )
+        precisa_geocodificar = precisa_geocodificar or (
+            ponto is None
+            and alterou_endereco
+            and bool(localizacao.get("cep", usuario.cep) or localizacao.get("cidade", usuario.cidade))
+        )
+        if precisa_geocodificar:
+            from .geocoding import localizar
 
-        try:
             ponto, cep, cidade, uf = localizar(
-                cep=localizacao.get("cep", getattr(getattr(usuario, "localizacao", None), "cep", "")),
-                cidade=localizacao.get("cidade", getattr(getattr(usuario, "localizacao", None), "cidade", "")),
-                uf=localizacao.get("uf", getattr(getattr(usuario, "localizacao", None), "uf", "")),
+                cep=localizacao.get("cep", usuario.cep),
+                cidade=localizacao.get("cidade", usuario.cidade),
+                uf=localizacao.get("uf", usuario.uf),
             )
-        except ValidationError:
-            raise
-        localizacao.update({"cep": cep, "cidade": cidade, "uf": uf})
+            localizacao.update({"cep": cep, "cidade": cidade, "uf": uf})
+
+        localizacao_mudou = (
+            (ponto is not None and ponto != usuario.ponto)
+            or any(
+                valor != getattr(usuario, campo)
+                for campo, valor in localizacao.items()
+                if campo in ("cep", "cidade", "uf")
+            )
+        )
 
     for campo, valor in dados.items():
         setattr(usuario, campo, valor)
     usuario.save()
 
-    if localizacao is not None and (localizacao or ponto is not None):
-        localizacao_atual, criada = Localizacao.objects.get_or_create(
-            usuario=usuario,
-            defaults={**localizacao, "ponto": ponto},
+    if localizacao is not None and localizacao_mudou:
+        for campo in ("cep", "cidade", "uf"):
+            if campo in localizacao:
+                setattr(usuario, campo, localizacao[campo])
+        if ponto is not None:
+            usuario.ponto = ponto
+        usuario.localizacao_atualizada_em = timezone.now()
+        usuario.save(
+            update_fields=["cep", "cidade", "uf", "ponto", "localizacao_atualizada_em"]
         )
-        localizacao_mudou = criada or localizacao_atual.ponto != ponto or any(
-            getattr(localizacao_atual, campo) != valor for campo, valor in localizacao.items()
+
+        from quero.anuncios.models import Anuncio
+
+        anuncios_abertos = Anuncio.objects.filter(
+            comprador=usuario,
+            status__in=(Anuncio.Status.ATIVO, Anuncio.Status.PAUSADO),
         )
-        if not criada:
-            for campo, valor in localizacao.items():
-                setattr(localizacao_atual, campo, valor)
-            localizacao_atual.ponto = ponto
-            localizacao_atual.save()
-
-        if localizacao_mudou:
-            from quero.anuncios.models import Anuncio
-
-            anuncios_abertos = Anuncio.objects.filter(
-                comprador=usuario,
-                status__in=(Anuncio.Status.ATIVO, Anuncio.Status.PAUSADO),
-            )
-            for anuncio in anuncios_abertos.iterator():
-                anuncio.ponto = ponto
-                anuncio.cidade = localizacao_atual.cidade
-                anuncio.uf = localizacao_atual.uf
-                anuncio.save(update_fields=["ponto", "cidade", "uf", "atualizado_em"])
+        for anuncio in anuncios_abertos.iterator():
+            anuncio.save(update_fields=["atualizado_em"])
     return usuario
 
 
@@ -147,14 +168,9 @@ def solicitar_alteracao_email(*, usuario, novo_email):
     if Usuario.objects.filter(email__iexact=novo_email).exclude(pk=usuario.pk).exists():
         raise ValidationError("Este e-mail já está sendo usado por outra conta.")
 
-    token = secrets.token_urlsafe(32)
-    alteracao, _ = AlteracaoEmailPendente.objects.update_or_create(
-        usuario=usuario,
-        defaults={
-            "novo_email": novo_email,
-            "token_hash": hashlib.sha256(token.encode("utf-8")).hexdigest(),
-            "expira_em": timezone.now() + timedelta(seconds=settings.EMAIL_CHANGE_TIMEOUT),
-        },
+    token = signing.dumps(
+        {"usuario_id": str(usuario.pk), "email_atual": usuario.email, "novo_email": novo_email},
+        salt="quero.alteracao-email",
     )
     partes_url = urlsplit(settings.EMAIL_CHANGE_URL)
     query = dict(parse_qsl(partes_url.query))
@@ -163,7 +179,7 @@ def solicitar_alteracao_email(*, usuario, novo_email):
     try:
         enviados = send_mail(
             "Confirme seu novo e-mail — Quero.",
-            f"Confirme a troca de e-mail pelo link abaixo. Ele expira em 24 horas:\n\n{link}",
+            f"Confirme a troca de e-mail pelo link abaixo. Ele expira em {settings.EMAIL_CHANGE_TIMEOUT // 3600} horas:\n\n{link}",
             settings.DEFAULT_FROM_EMAIL,
             [novo_email],
         )
@@ -172,25 +188,28 @@ def solicitar_alteracao_email(*, usuario, novo_email):
         raise ValidationError("Não foi possível enviar o e-mail de confirmação.") from exc
     if not enviados:
         raise ValidationError("Não foi possível enviar o e-mail de confirmação.")
-    return alteracao
+    return token
 
 
 @transaction.atomic
 def confirmar_alteracao_email(*, token):
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     try:
-        alteracao = AlteracaoEmailPendente.objects.select_for_update().select_related("usuario").get(token_hash=token_hash)
-    except AlteracaoEmailPendente.DoesNotExist as exc:
+        dados = signing.loads(
+            token,
+            salt="quero.alteracao-email",
+            max_age=settings.EMAIL_CHANGE_TIMEOUT,
+        )
+        usuario = Usuario.objects.select_for_update().get(pk=dados["usuario_id"])
+        novo_email = dados["novo_email"]
+        email_atual = dados["email_atual"]
+    except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError, ValueError, Usuario.DoesNotExist) as exc:
         raise ValidationError("O link de confirmação é inválido ou expirou.") from exc
 
-    if alteracao.expira_em <= timezone.now():
-        alteracao.delete()
+    if usuario.email != email_atual:
         raise ValidationError("O link de confirmação é inválido ou expirou.")
-    if Usuario.objects.filter(email__iexact=alteracao.novo_email).exclude(pk=alteracao.usuario_id).exists():
+    if Usuario.objects.filter(email__iexact=novo_email).exclude(pk=usuario.pk).exists():
         raise ValidationError("Este e-mail já está sendo usado por outra conta.")
 
-    usuario = alteracao.usuario
-    usuario.email = alteracao.novo_email
+    usuario.email = novo_email
     usuario.save(update_fields=["email"])
-    alteracao.delete()
     return usuario

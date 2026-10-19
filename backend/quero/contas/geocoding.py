@@ -6,12 +6,9 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.utils import timezone
-
-from .models import GeocodificacaoCache, LimiteGeocodificador
 
 
 def _chave_localizacao(*, cep, cidade, uf):
@@ -57,39 +54,39 @@ def localizar(*, cep="", cidade="", uf=""):
         raise ValidationError("Informe um CEP ou uma cidade para localizar o endereço.")
 
     chave = _chave_localizacao(cep=cep, cidade=cidade, uf=uf)
-    cache = GeocodificacaoCache.objects.filter(chave=chave).first()
-    if cache:
-        return cache.ponto, cache.cep, cache.cidade, cache.uf
+    chave_cache = f"geocodificacao:v1:{chave}"
+    resultado_cache = cache.get(chave_cache)
+    if resultado_cache:
+        return (
+            Point(resultado_cache["longitude"], resultado_cache["latitude"], srid=4326),
+            resultado_cache["cep"],
+            resultado_cache["cidade"],
+            resultado_cache["uf"],
+        )
 
-    erro = None
-    resultado = None
-    with transaction.atomic():
-        limite, _ = LimiteGeocodificador.objects.get_or_create(nome="nominatim")
-        limite = LimiteGeocodificador.objects.select_for_update().get(nome=limite.nome)
-        cache = GeocodificacaoCache.objects.filter(chave=chave).first()
-        if cache:
-            return cache.ponto, cache.cep, cache.cidade, cache.uf
+    limite_cache = "geocodificador:nominatim:intervalo"
+    while not cache.add(limite_cache, True, timeout=1):
+        time.sleep(0.05)
 
-        agora = timezone.now()
-        if limite.ultima_consulta_em:
-            intervalo = (agora - limite.ultima_consulta_em).total_seconds()
-            if intervalo < 1:
-                time.sleep(1 - intervalo)
-        limite.ultima_consulta_em = timezone.now()
-        limite.save(update_fields=["ultima_consulta_em"])
+    resultado_cache = cache.get(chave_cache)
+    if resultado_cache:
+        return (
+            Point(resultado_cache["longitude"], resultado_cache["latitude"], srid=4326),
+            resultado_cache["cep"],
+            resultado_cache["cidade"],
+            resultado_cache["uf"],
+        )
 
-        # O lock global serializa chamadas e respeita o limite do serviço público.
-        try:
-            resultado = _buscar_no_nominatim(cep=cep, cidade=cidade, uf=uf)
-        except ValidationError as exc:
-            erro = exc
-        except (KeyError, TypeError, ValueError) as exc:
-            erro = ValidationError("O serviço de localização retornou uma resposta inválida.")
-            erro.__cause__ = exc
-        if resultado:
-            ponto, cep, cidade, uf = resultado
-            GeocodificacaoCache.objects.create(chave=chave, ponto=ponto, cep=cep, cidade=cidade, uf=uf)
+    try:
+        ponto, cep, cidade, uf = _buscar_no_nominatim(cep=cep, cidade=cidade, uf=uf)
+    except ValidationError:
+        raise
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValidationError("O serviço de localização retornou uma resposta inválida.") from exc
 
-    if erro:
-        raise erro
+    cache.set(
+        chave_cache,
+        {"longitude": ponto.x, "latitude": ponto.y, "cep": cep, "cidade": cidade, "uf": uf},
+        timeout=30 * 24 * 60 * 60,
+    )
     return ponto, cep, cidade, uf

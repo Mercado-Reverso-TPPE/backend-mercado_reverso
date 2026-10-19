@@ -5,8 +5,8 @@ from rest_framework import status
 
 from quero.anuncios.models import Anuncio
 from quero.anuncios.services import alterar_status_anuncio, criar_anuncio
-from quero.contas.models import Localizacao, Usuario
-from quero.ofertas.models import HistoricoOferta, Oferta
+from quero.contas.models import Usuario
+from quero.ofertas.models import EventoNegociacao, Oferta
 from quero.ofertas.services import editar_oferta, enviar_oferta, retirar_oferta
 
 
@@ -38,19 +38,17 @@ def test_transicoes_de_status_do_anuncio(anuncio, estado_inicial, novo_estado, e
 @pytest.mark.parametrize("tem_localizacao", [True, False])
 def test_criacao_de_anuncio_exige_localizacao(categoria, usuario, tem_localizacao):
     if tem_localizacao:
-        Localizacao.objects.create(
-            usuario=usuario,
-            ponto=Point(-46.63, -23.55, srid=4326),
-            cidade="São Paulo",
-            uf="SP",
-        )
+        usuario.ponto = Point(-46.63, -23.55, srid=4326)
+        usuario.cidade = "São Paulo"
+        usuario.uf = "SP"
+        usuario.save(update_fields=["ponto", "cidade", "uf"])
 
     dados = {"titulo": "Procuro bicicleta", "categoria": categoria, "descricao": "Em bom estado"}
     if tem_localizacao:
         anuncio = criar_anuncio(comprador=usuario, dados=dados)
         assert anuncio.raio_m == 20_000
-        assert anuncio.ponto == usuario.localizacao.ponto
-        assert anuncio.cidade == "São Paulo"
+        assert anuncio.comprador.ponto == usuario.ponto
+        assert anuncio.comprador.cidade == "São Paulo"
     else:
         with pytest.raises(ValidationError, match="localização"):
             criar_anuncio(comprador=usuario, dados=dados)
@@ -73,26 +71,28 @@ def test_listagem_de_categorias_expõe_apenas_categorias_ativas(cliente_api, cat
 def test_nao_e_possivel_ofertar_em_anuncio_inativo(anuncio, vendedor, estado_anuncio):
     anuncio.status = estado_anuncio
     anuncio.save(update_fields=["status"])
-    Localizacao.objects.create(usuario=vendedor, ponto=anuncio.ponto)
+    vendedor.ponto = anuncio.comprador.ponto
+    vendedor.save(update_fields=["ponto"])
 
     with pytest.raises(ValidationError, match="anúncios ativos"):
         enviar_oferta(
             vendedor=vendedor,
             anuncio_id=anuncio.pk,
-            dados={"descricao": "Minha oferta", "estado_conservacao": Oferta.EstadoConservacao.USADO, "preco": "100.00"},
+            dados={"descricao": "Minha oferta", "estado_conservacao": Oferta.EstadoConservacao.USADO_BOM, "preco": "100.00"},
         )
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("longitude", [-46.6333, -48.0])
 def test_oferta_so_pode_ser_enviada_por_vendedor_dentro_do_raio(anuncio, vendedor, longitude):
-    Localizacao.objects.create(usuario=vendedor, ponto=Point(longitude, -23.5505, srid=4326))
+    vendedor.ponto = Point(longitude, -23.5505, srid=4326)
+    vendedor.save(update_fields=["ponto"])
     dados = {"descricao": "Notebook em ótimo estado", "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO, "preco": "1200.00"}
 
     if longitude == -46.6333:
         oferta = enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
         assert oferta.status == Oferta.Status.ENVIADA
-        assert oferta.historico.count() == 1
+        assert oferta.eventos.count() == 1
     else:
         with pytest.raises(ValidationError, match="fora do raio"):
             enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
@@ -100,7 +100,8 @@ def test_oferta_so_pode_ser_enviada_por_vendedor_dentro_do_raio(anuncio, vendedo
 
 @pytest.mark.django_db
 def test_oferta_unica_por_vendedor_edicao_e_retirada_registram_historico(anuncio, vendedor):
-    Localizacao.objects.create(usuario=vendedor, ponto=anuncio.ponto)
+    vendedor.ponto = anuncio.comprador.ponto
+    vendedor.save(update_fields=["ponto"])
     dados = {"descricao": "Notebook em ótimo estado", "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO, "preco": "1200.00"}
     oferta = enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
 
@@ -108,11 +109,11 @@ def test_oferta_unica_por_vendedor_edicao_e_retirada_registram_historico(anuncio
         enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
 
     oferta = editar_oferta(oferta=oferta, vendedor=vendedor, dados={"preco": "1100.00"})
-    assert oferta.historico.count() == 2
+    assert oferta.eventos.count() == 2
     retirar_oferta(oferta=oferta, vendedor=vendedor)
-    assert oferta.historico.count() == 3
+    assert oferta.eventos.count() == 3
     assert oferta.status == Oferta.Status.RETIRADA
-    assert HistoricoOferta.objects.filter(oferta=oferta).count() == 3
+    assert EventoNegociacao.objects.filter(oferta=oferta).count() == 3
 
 
 @pytest.mark.django_db
@@ -122,8 +123,10 @@ def test_comprador_ve_ofertas_do_anuncio_e_vendedor_ve_apenas_as_proprias(
     outro_vendedor = Usuario.objects.create_user(
         email="outro@example.com", password="Senha-forte-123!", nome="Outro Vendedor"
     )
-    Localizacao.objects.create(usuario=vendedor, ponto=anuncio.ponto)
-    Localizacao.objects.create(usuario=outro_vendedor, ponto=anuncio.ponto)
+    vendedor.ponto = anuncio.comprador.ponto
+    vendedor.save(update_fields=["ponto"])
+    outro_vendedor.ponto = anuncio.comprador.ponto
+    outro_vendedor.save(update_fields=["ponto"])
     dados = {"descricao": "Oferta", "estado_conservacao": Oferta.EstadoConservacao.NOVO, "preco": "100.00"}
     oferta_propria = enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
     enviar_oferta(vendedor=outro_vendedor, anuncio_id=anuncio.pk, dados=dados)

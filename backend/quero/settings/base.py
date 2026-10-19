@@ -7,13 +7,28 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-local-development-key")
 DEBUG = False
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")]
-INSTALLED_APPS = ["django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes", "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles", "django.contrib.gis", "rest_framework", "rest_framework_simplejwt.token_blacklist", "corsheaders", "quero.core", "quero.contas", "quero.anuncios", "quero.ofertas"]
+INSTALLED_APPS = ["django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes", "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles", "django.contrib.gis", "rest_framework", "rest_framework_simplejwt.token_blacklist", "corsheaders", "quero.core", "quero.contas", "quero.anuncios", "quero.ofertas", "quero.catalogo", "quero.negociacao", "quero.descoberta", "quero.notificacoes", "quero.reputacao", "quero.moderacao"]
 MIDDLEWARE = ["django.middleware.security.SecurityMiddleware", "corsheaders.middleware.CorsMiddleware", "django.contrib.sessions.middleware.SessionMiddleware", "django.middleware.common.CommonMiddleware", "django.middleware.csrf.CsrfViewMiddleware", "django.contrib.auth.middleware.AuthenticationMiddleware", "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware"]
 ROOT_URLCONF = "quero.urls"
 TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "DIRS": [], "APP_DIRS": True, "OPTIONS": {"context_processors": ["django.template.context_processors.request", "django.contrib.auth.context_processors.auth", "django.contrib.messages.context_processors.messages"]}}]
 WSGI_APPLICATION = "quero.wsgi.application"
 ASGI_APPLICATION = "quero.asgi.application"
 DATABASES = {"default": dj_database_url.config(default="postgis://quero:quero@db:5432/quero", conn_max_age=600, engine="django.contrib.gis.db.backends.postgis")}
+CACHE_REDIS_URL = os.getenv("REDIS_URL", "").strip()
+if CACHE_REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_REDIS_URL,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "quero-default-cache",
+        }
+    }
 AUTH_USER_MODEL = "contas.Usuario"
 AUTH_PASSWORD_VALIDATORS = [{"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"}, {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}}, {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"}, {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"}]
 LANGUAGE_CODE = "pt-br"

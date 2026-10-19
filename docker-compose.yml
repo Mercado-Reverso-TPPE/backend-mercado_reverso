@@ -23,6 +23,7 @@ services:
       DJANGO_SETTINGS_MODULE: quero.settings.dev
       SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-change-me}
       DATABASE_URL: postgresql://${POSTGRES_USER:-quero}:${POSTGRES_PASSWORD:-quero}@db:5432/${POSTGRES_DB:-quero}
+      REDIS_URL: ${REDIS_URL:-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       RAIO_PADRAO_KM: ${RAIO_PADRAO_KM:-20}

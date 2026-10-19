@@ -10,14 +10,14 @@ API REST do marketplace Quero., organizada em MVC com camadas. Este repositório
 
 No pgAdmin, conecte ao host `db`, porta `5432`, banco e usuário configurados no `.env`.
 
-Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.prod` e configure `SECRET_KEY`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` e `CSRF_TRUSTED_ORIGINS`. SMTP, geocodificador e URLs de confirmação/reset também são configuráveis pelo ambiente; consulte `.env.example`.
+Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.prod` e configure `SECRET_KEY`, `REDIS_URL`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` e `CSRF_TRUSTED_ORIGINS`. O cache compartilhado é usado para controle de tentativas de login e cache/limitação de geocodificação. SMTP, geocodificador e URLs de confirmação/reset também são configuráveis pelo ambiente; consulte `.env.example`.
 
 ## Release 1 — backend
 
 - Cadastro, login JWT, renovação e encerramento de sessão; bloqueio temporário após falhas consecutivas configurável.
 - Recuperação de senha por e-mail, com token de uso único e prazo configurável.
 - Consulta e atualização do perfil/localização; troca de e-mail mediante confirmação. Atualizar a localização recalcula o centro geográfico dos anúncios ativos e pausados.
-- Geocodificação de CEP/cidade para coordenadas, com cache no banco. O serviço padrão é o Nominatim público do OpenStreetMap, configurável por `GEOCODER_URL` e `GEOCODER_USER_AGENT`.
+- Geocodificação de CEP/cidade para coordenadas, com cache configurável (em memória no desenvolvimento e Redis compartilhado em produção). O serviço padrão é o Nominatim público do OpenStreetMap, configurável por `GEOCODER_URL` e `GEOCODER_USER_AGENT`.
 - Catálogo de categorias, anúncios de procura, feed por alcance/distância, gerenciamento de status e contagem de ofertas.
 - Envio, consulta, edição e retirada de ofertas; histórico de preços e restrição de visibilidade para impedir que vendedores vejam ofertas concorrentes.
 
@@ -47,6 +47,8 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 O Nominatim público exige identificação no `User-Agent`, uso moderado e atribuição ao OpenStreetMap. A interface deve exibir “© OpenStreetMap contributors” quando apresentar resultados de geocodificação. Para maior volume, configure um provedor apropriado em vez do serviço público.
 
 As regras de negócio ficam em `services.py`; os modelos representam os dados, serializers validam entrada e saída, e views tratam HTTP e autorização. Migrações existentes preservam os dados dos anúncios já cadastrados ao introduzir o catálogo de categorias.
+
+O schema de domínio tem no máximo 15 modelos/tabelas próprios, com dados relacionais normalizados; tabelas internas do Django e tabelas auxiliares do PostgreSQL/PostGIS não entram nessa contagem. Localização de referência é atributo 1:1 do usuário, eventos de negociação reúnem histórico de preço, contrapropostas e mensagens, e o alcance geográfico é materializado apenas para indexação GiST.
 
 ## Testes
 

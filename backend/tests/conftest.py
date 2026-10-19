@@ -1,14 +1,22 @@
 import pytest
+from django.core.cache import cache
 from django.contrib.gis.geos import Point
 from rest_framework.test import APIClient
 
 from quero.anuncios.models import Anuncio, Categoria
-from quero.contas.models import Localizacao, Usuario
+from quero.contas.models import Usuario
 
 
 @pytest.fixture
 def cliente_api():
     return APIClient()
+
+
+@pytest.fixture(autouse=True)
+def limpar_cache():
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture
@@ -27,12 +35,10 @@ def usuario(db):
 
 @pytest.fixture
 def usuario_com_localizacao(usuario):
-    Localizacao.objects.create(
-        usuario=usuario,
-        ponto=Point(-46.6333, -23.5505, srid=4326),
-        cidade="São Paulo",
-        uf="SP",
-    )
+    usuario.ponto = Point(-46.6333, -23.5505, srid=4326)
+    usuario.cidade = "São Paulo"
+    usuario.uf = "SP"
+    usuario.save(update_fields=["ponto", "cidade", "uf"])
     return usuario
 
 
@@ -53,7 +59,4 @@ def anuncio(categoria, usuario_com_localizacao):
         categoria=categoria,
         descricao="Notebook para estudo",
         raio_m=20_000,
-        ponto=usuario_com_localizacao.localizacao.ponto,
-        cidade="São Paulo",
-        uf="SP",
     )

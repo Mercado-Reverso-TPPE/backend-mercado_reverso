@@ -23,9 +23,15 @@ class OfertasDoAnuncioView(APIView):
 
     def get(self, request, anuncio_id):
         anuncio = get_object_or_404(Anuncio, pk=anuncio_id)
-        ofertas = Oferta.objects.filter(anuncio=anuncio).select_related("vendedor").prefetch_related("historico")
+        ofertas = Oferta.objects.filter(anuncio=anuncio).select_related("vendedor").prefetch_related("eventos")
         if anuncio.comprador_id == request.user.pk:
-            ofertas = ofertas.filter(status__in=(Oferta.Status.ENVIADA, Oferta.Status.ACEITA))
+            ofertas = ofertas.filter(
+                status__in=(
+                    Oferta.Status.ENVIADA,
+                    Oferta.Status.EM_NEGOCIACAO,
+                    Oferta.Status.ACEITA,
+                )
+            )
         else:
             ofertas = ofertas.filter(vendedor=request.user)
         paginator = OfertaPagination()
@@ -75,7 +81,7 @@ class MinhasOfertasView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        ofertas = Oferta.objects.filter(vendedor=request.user).select_related("anuncio", "anuncio__categoria").prefetch_related("historico")
+        ofertas = Oferta.objects.filter(vendedor=request.user).select_related("anuncio", "anuncio__categoria").prefetch_related("eventos")
         paginator = OfertaPagination()
         pagina = paginator.paginate_queryset(ofertas, request, view=self)
         return paginator.get_paginated_response(OfertaSerializer(pagina, many=True).data)

@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from django.contrib.gis.geos import Point
 from django.core import mail
 from rest_framework import status
 
-from quero.contas.models import AlteracaoEmailPendente, Localizacao, Usuario
+from quero.contas.models import Usuario
 from quero.contas.services import (
     acesso_bloqueado,
     confirmar_alteracao_email,
@@ -69,7 +70,7 @@ def test_cadastro_geocodifica_cep_ou_cidade_sem_chamar_servico_externo(
 
     assert resposta.status_code == status.HTTP_201_CREATED
     geocodificar.assert_called_once_with(**consulta_esperada)
-    assert Usuario.objects.get(email="geo@example.com").localizacao.ponto == ponto
+    assert Usuario.objects.get(email="geo@example.com").ponto == ponto
 
 
 @pytest.mark.django_db
@@ -143,8 +144,8 @@ def test_troca_de_email_requer_token_e_token_so_pode_ser_usado_uma_vez(usuario):
     from django.core.exceptions import ValidationError
 
     solicitar_alteracao_email(usuario=usuario, novo_email="novo@example.com")
-    token = mail.outbox[-1].body.split("token=", 1)[1].split()[0]
-    assert AlteracaoEmailPendente.objects.filter(usuario=usuario).exists()
+    token = parse_qs(urlsplit(mail.outbox[-1].body.splitlines()[-1]).query)["token"][0]
+    assert usuario.email == "pessoa@example.com"
 
     confirmar_alteracao_email(token=token)
     usuario.refresh_from_db()
@@ -167,5 +168,5 @@ def test_atualizar_perfil_com_coordenadas_reposiciona_anuncios(
 
     assert resposta.status_code == status.HTTP_200_OK
     anuncio.refresh_from_db()
-    assert anuncio.ponto == Point(longitude, latitude, srid=4326)
-    assert usuario_com_localizacao.localizacao.ponto == anuncio.ponto
+    assert anuncio.comprador.ponto == Point(longitude, latitude, srid=4326)
+    assert anuncio.alcance.intersects(anuncio.comprador.ponto)

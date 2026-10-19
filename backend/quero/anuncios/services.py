@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db.models import ObjectDoesNotExist
 from django.db import transaction
 
 from .models import Anuncio
@@ -9,16 +8,11 @@ from .models import Anuncio
 @transaction.atomic
 def criar_anuncio(*, comprador, dados):
     """Cria uma demanda usando a localização de referência do comprador."""
-    try:
-        ponto = comprador.localizacao.ponto
-    except ObjectDoesNotExist as exc:
-        raise ValidationError("Cadastre uma localização antes de publicar um anúncio.") from exc
+    if comprador.ponto is None:
+        raise ValidationError("Cadastre uma localização antes de publicar um anúncio.")
 
     dados = dados.copy()
     dados["raio_m"] = dados.get("raio_m", settings.RAIO_PADRAO_KM * 1000)
-    dados["ponto"] = ponto
-    dados["cidade"] = comprador.localizacao.cidade
-    dados["uf"] = comprador.localizacao.uf
     anuncio = Anuncio(comprador=comprador, **dados)
     anuncio.save()
     return anuncio

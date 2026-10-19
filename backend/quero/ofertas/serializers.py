@@ -1,12 +1,12 @@
 from rest_framework import serializers
 
-from .models import HistoricoOferta, Oferta
+from .models import EventoNegociacao, Oferta
 
 
-class HistoricoOfertaSerializer(serializers.ModelSerializer):
+class EventoNegociacaoSerializer(serializers.ModelSerializer):
     class Meta:
-        model = HistoricoOferta
-        fields = ("preco", "status", "registrado_em")
+        model = EventoNegociacao
+        fields = ("preco", "status", "tipo_evento", "justificativa", "rodada", "registrado_em")
         read_only_fields = fields
 
 
@@ -14,7 +14,7 @@ class OfertaSerializer(serializers.ModelSerializer):
     anuncio_id = serializers.UUIDField(read_only=True)
     vendedor_id = serializers.UUIDField(read_only=True)
     vendedor_nome = serializers.CharField(source="vendedor.nome", read_only=True)
-    historico = HistoricoOfertaSerializer(many=True, read_only=True)
+    historico = EventoNegociacaoSerializer(source="eventos", many=True, read_only=True)
     preco = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
 
     class Meta:

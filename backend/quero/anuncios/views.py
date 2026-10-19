@@ -49,9 +49,14 @@ class AnuncioViewSet(viewsets.ModelViewSet):
         if self.action in ("list", "retrieve"):
             if self.request.query_params.get("meus") == "true":
                 return qs.filter(comprador=user)
-            if not hasattr(user, "localizacao"):
+            if user.ponto is None:
                 return qs.none()
-            return qs.filter(status=Anuncio.Status.ATIVO, alcance__intersects=user.localizacao.ponto).annotate(distancia_m=Distance("ponto", user.localizacao.ponto)).order_by("distancia_m", "-criado_em")
+            return qs.filter(
+                status=Anuncio.Status.ATIVO,
+                alcance__intersects=user.ponto,
+            ).annotate(
+                distancia_m=Distance("comprador__ponto", user.ponto)
+            ).order_by("distancia_m", "-criado_em")
         return qs.filter(comprador=user)
 
     def perform_create(self, serializer):

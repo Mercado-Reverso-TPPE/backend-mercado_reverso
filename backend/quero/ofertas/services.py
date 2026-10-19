@@ -1,10 +1,9 @@
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import ObjectDoesNotExist
 
 from quero.anuncios.models import Anuncio
 
-from .models import HistoricoOferta, Oferta
+from .models import EventoNegociacao, Oferta
 
 
 @transaction.atomic
@@ -18,10 +17,9 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
         raise ValidationError("Só é possível ofertar em anúncios ativos.")
     if anuncio.comprador_id == vendedor.pk:
         raise ValidationError("Não é possível ofertar no próprio anúncio.")
-    try:
-        ponto_vendedor = vendedor.localizacao.ponto
-    except ObjectDoesNotExist as exc:
-        raise ValidationError("Cadastre uma localização antes de enviar uma oferta.") from exc
+    ponto_vendedor = vendedor.ponto
+    if ponto_vendedor is None:
+        raise ValidationError("Cadastre uma localização antes de enviar uma oferta.")
 
     esta_no_raio = Anuncio.objects.filter(pk=anuncio.pk, alcance__intersects=ponto_vendedor).exists()
     if not esta_no_raio:
@@ -33,7 +31,13 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
     except IntegrityError as exc:
         raise ValidationError("Você já tem uma oferta ativa neste anúncio.") from exc
 
-    HistoricoOferta.objects.create(oferta=oferta, autor=vendedor, preco=oferta.preco, status=oferta.status)
+    EventoNegociacao.objects.create(
+        oferta=oferta,
+        autor=vendedor,
+        preco=oferta.preco,
+        status=oferta.status,
+        tipo_evento=EventoNegociacao.TipoEvento.ENVIADA,
+    )
     return oferta
 
 
@@ -50,7 +54,13 @@ def editar_oferta(*, oferta, vendedor, dados):
         setattr(oferta, campo, valor)
     oferta.save(update_fields=[*dados.keys(), "atualizada_em"])
     if mudou_preco:
-        HistoricoOferta.objects.create(oferta=oferta, autor=vendedor, preco=oferta.preco, status=oferta.status)
+        EventoNegociacao.objects.create(
+            oferta=oferta,
+            autor=vendedor,
+            preco=oferta.preco,
+            status=oferta.status,
+            tipo_evento=EventoNegociacao.TipoEvento.EDITADA,
+        )
     return oferta
 
 
@@ -63,5 +73,11 @@ def retirar_oferta(*, oferta, vendedor):
         raise ValidationError("Esta oferta não pode mais ser retirada.")
     oferta.status = Oferta.Status.RETIRADA
     oferta.save(update_fields=["status", "atualizada_em"])
-    HistoricoOferta.objects.create(oferta=oferta, autor=vendedor, preco=oferta.preco, status=oferta.status)
+    EventoNegociacao.objects.create(
+        oferta=oferta,
+        autor=vendedor,
+        preco=oferta.preco,
+        status=oferta.status,
+        tipo_evento=EventoNegociacao.TipoEvento.RETIRADA,
+    )
     return oferta

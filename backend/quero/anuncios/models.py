@@ -31,9 +31,6 @@ class Anuncio(models.Model):
     preco_min = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     preco_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     raio_m = models.PositiveIntegerField()
-    cidade = models.CharField(max_length=120, blank=True)
-    uf = models.CharField(max_length=2, blank=True)
-    ponto = gis_models.PointField(geography=True, srid=4326)
     alcance = gis_models.PolygonField(geography=True, srid=4326, editable=False, null=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ATIVO)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -41,7 +38,7 @@ class Anuncio(models.Model):
 
     class Meta:
         ordering = ("-criado_em",)
-        indexes = [gis_models.Index(fields=["alcance"], name="anuncio_alcance_gist"), gis_models.Index(fields=["ponto"], name="anuncio_ponto_gist"), models.Index(fields=["status", "categoria"], name="anuncio_status_categoria")]
+        indexes = [gis_models.Index(fields=["alcance"], name="anuncio_alcance_gist"), models.Index(fields=["status", "categoria"], name="anuncio_status_categoria")]
 
     def clean(self):
         if self.preco_min is not None and self.preco_max is not None and self.preco_min > self.preco_max:
@@ -52,9 +49,19 @@ class Anuncio(models.Model):
             raise ValidationError({"raio_m": "O raio informado está fora do limite permitido."})
         self.full_clean()
         super().save(*args, **kwargs)
-        # Geography buffer usa metros e é recalculado sempre que ponto ou raio muda.
+        # The reach polygon is a spatially indexed materialization of buyer location and radius.
         with connection.cursor() as cursor:
-            cursor.execute("UPDATE anuncios_anuncio SET alcance = ST_Buffer(ponto, raio_m) WHERE id = %s", [str(self.pk)])
+            cursor.execute(
+                """
+                UPDATE anuncios_anuncio AS anuncio
+                SET alcance = ST_Buffer(usuario.ponto, anuncio.raio_m)
+                FROM contas_usuario AS usuario
+                WHERE anuncio.comprador_id = usuario.id
+                  AND anuncio.id = %s
+                  AND usuario.ponto IS NOT NULL
+                """,
+                [str(self.pk)],
+            )
 
     def delete(self, *args, **kwargs):
         if self.status == self.Status.ENCERRADO:
