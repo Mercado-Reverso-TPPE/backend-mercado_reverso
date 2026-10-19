@@ -95,6 +95,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="negociacao",
-            index=models.Index(fields=["status", "atualizada_em"], name="negociacao_status_atualizada_idx"),
+            index=models.Index(fields=["status", "atualizada_em"], name="neg_status_atual_idx"),
         ),
     ]

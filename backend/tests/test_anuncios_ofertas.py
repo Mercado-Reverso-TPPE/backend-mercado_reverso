@@ -63,7 +63,14 @@ def test_listagem_de_categorias_expõe_apenas_categorias_ativas(cliente_api, cat
     resposta = cliente_api.get("/api/v1/categorias")
 
     assert resposta.status_code == status.HTTP_200_OK
-    assert [item["slug"] for item in resposta.data] == [categoria.slug]
+    slugs_ativos = list(
+        Categoria.objects.filter(ativa=True)
+        .order_by("nome")
+        .values_list("slug", flat=True)
+    )
+    assert [item["slug"] for item in resposta.data] == slugs_ativos
+    assert categoria.slug in slugs_ativos
+    assert "oculta" not in slugs_ativos
 
 
 @pytest.mark.django_db
@@ -110,7 +117,7 @@ def test_oferta_unica_por_vendedor_edicao_e_retirada_registram_historico(anuncio
 
     oferta = editar_oferta(oferta=oferta, vendedor=vendedor, dados={"preco": "1100.00"})
     assert oferta.eventos.count() == 2
-    retirar_oferta(oferta=oferta, vendedor=vendedor)
+    oferta = retirar_oferta(oferta=oferta, vendedor=vendedor)
     assert oferta.eventos.count() == 3
     assert oferta.status == Oferta.Status.RETIRADA
     assert EventoNegociacao.objects.filter(oferta=oferta).count() == 3
@@ -134,10 +141,10 @@ def test_comprador_ve_ofertas_do_anuncio_e_vendedor_ve_apenas_as_proprias(
     cliente_api.force_authenticate(user=anuncio.comprador)
     resposta_comprador = cliente_api.get(f"/api/v1/anuncios/{anuncio.pk}/ofertas")
     assert resposta_comprador.status_code == status.HTTP_200_OK
-    assert resposta_comprador.data["count"] == 2
+    assert len(resposta_comprador.data["results"]) == 2
 
     cliente_api.force_authenticate(user=vendedor)
     resposta_vendedor = cliente_api.get(f"/api/v1/anuncios/{anuncio.pk}/ofertas")
     assert resposta_vendedor.status_code == status.HTTP_200_OK
-    assert resposta_vendedor.data["count"] == 1
+    assert len(resposta_vendedor.data["results"]) == 1
     assert resposta_vendedor.data["results"][0]["id"] == str(oferta_propria.pk)

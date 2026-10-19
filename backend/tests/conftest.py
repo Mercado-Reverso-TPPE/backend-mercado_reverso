@@ -21,7 +21,11 @@ def limpar_cache():
 
 @pytest.fixture
 def categoria(db):
-    return Categoria.objects.create(nome="Eletrônicos", slug="eletronicos")
+    categoria, _ = Categoria.objects.get_or_create(
+        slug="eletronicos",
+        defaults={"nome": "Eletrônicos"},
+    )
+    return categoria
 
 
 @pytest.fixture

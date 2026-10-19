@@ -43,7 +43,7 @@ class Notificacao(models.Model):
     class Meta:
         ordering = ("-criada_em",)
         indexes = [
-            models.Index(fields=("usuario", "lida_em", "-criada_em"), name="notificacao_usuario_leitura_idx"),
+            models.Index(fields=("usuario", "lida_em", "-criada_em"), name="notif_usuario_lida_idx"),
             models.Index(fields=("usuario", "agrupamento"), name="notificacao_agrupamento_idx"),
         ]
 

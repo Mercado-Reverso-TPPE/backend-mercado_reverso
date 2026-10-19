@@ -1,6 +1,7 @@
 import uuid
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
+from django.contrib.postgres.indexes import GistIndex
 from django.db import models, connection
 from django.core.exceptions import ValidationError
 
@@ -38,7 +39,7 @@ class Anuncio(models.Model):
 
     class Meta:
         ordering = ("-criado_em",)
-        indexes = [gis_models.Index(fields=["alcance"], name="anuncio_alcance_gist"), models.Index(fields=["status", "categoria"], name="anuncio_status_categoria")]
+        indexes = [GistIndex(fields=["alcance"], name="anuncio_alcance_gist"), models.Index(fields=["status", "categoria"], name="anuncio_status_categoria")]
 
     def clean(self):
         if self.preco_min is not None and self.preco_max is not None and self.preco_min > self.preco_max:

@@ -60,7 +60,7 @@ class Migration(migrations.Migration):
             model_name="notificacao",
             index=models.Index(
                 fields=["usuario", "lida_em", "-criada_em"],
-                name="notificacao_usuario_leitura_idx",
+                name="notif_usuario_lida_idx",
             ),
         ),
         migrations.AddIndex(

@@ -60,5 +60,5 @@ class Negociacao(models.Model):
             models.CheckConstraint(condition=Q(valor_final__gt=0), name="negociacao_valor_final_positivo"),
         ]
         indexes = [
-            models.Index(fields=("status", "atualizada_em"), name="negociacao_status_atualizada_idx"),
+            models.Index(fields=("status", "atualizada_em"), name="neg_status_atual_idx"),
         ]
