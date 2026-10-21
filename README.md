@@ -20,6 +20,7 @@ Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.
 - Geocodificação de CEP/cidade para coordenadas, com cache configurável (em memória no desenvolvimento e Redis compartilhado em produção). O serviço padrão é o Nominatim público do OpenStreetMap, configurável por `GEOCODER_URL` e `GEOCODER_USER_AGENT`.
 - Catálogo de categorias, anúncios de procura, feed por alcance/distância, gerenciamento de status e contagem de ofertas.
 - Envio, consulta, edição e retirada de ofertas; histórico de preços e restrição de visibilidade para impedir que vendedores vejam ofertas concorrentes.
+- Catálogo do vendedor: CRUD de produtos restrito ao proprietário, upload de fotos com limites de quantidade, tamanho e formato (`PRODUTO_FOTOS_MAXIMO`, `PRODUTO_FOTO_TAMANHO_MAXIMO_MB`; JPEG, PNG ou WEBP) e status disponível/reservado/vendido. O produto fica reservado enquanto há negociação em andamento, volta a ficar disponível se ela for cancelada e passa a vendido quando é concluída. Ofertas podem usar um produto disponível do catálogo; nome, descrição, estado, preço e foto de capa são copiados para a oferta, e alterações ou exclusões posteriores do produto não alteram ofertas já enviadas.
 
 ## Rotas principais
 
@@ -40,9 +41,14 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | GET | `/anuncios/meus` | Listar anúncios próprios |
 | GET / PATCH | `/anuncios/{id}` | Consultar/editar anúncio próprio |
 | PATCH | `/anuncios/{id}/status` | Pausar, reativar ou encerrar anúncio |
-| GET / POST | `/anuncios/{id}/ofertas` | Listar ofertas visíveis / enviar oferta |
+| GET / POST | `/anuncios/{id}/ofertas` | Listar ofertas visíveis / enviar oferta (opcionalmente com `produto_id` do catálogo) |
 | GET | `/ofertas/meus` | Listar ofertas enviadas |
 | PATCH / DELETE | `/ofertas/{id}` | Editar / retirar oferta ainda não aceita |
+| GET / POST | `/produtos` | Listar (filtro opcional `?status=`) / cadastrar produtos do catálogo próprio |
+| GET / PATCH / DELETE | `/produtos/{id}` | Consultar / editar / excluir produto próprio |
+| PATCH | `/produtos/{id}/status` | Marcar produto como disponível, reservado ou vendido fora de negociação |
+| POST | `/produtos/{id}/fotos` | Enviar fotos (multipart, campo `fotos` repetido); o lote é aceito por inteiro ou rejeitado |
+| DELETE | `/produtos/{id}/fotos/{foto_id}` | Remover foto |
 
 O Nominatim público exige identificação no `User-Agent`, uso moderado e atribuição ao OpenStreetMap. A interface deve exibir “© OpenStreetMap contributors” quando apresentar resultados de geocodificação. Para maior volume, configure um provedor apropriado em vez do serviço público.
 
