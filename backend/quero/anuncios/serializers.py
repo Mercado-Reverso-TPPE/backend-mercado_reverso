@@ -36,7 +36,7 @@ class AnuncioSerializer(serializers.ModelSerializer):
 
     def get_distancia_km(self, obj):
         distancia = getattr(obj, "distancia_m", None)
-        return round(distancia.km, 2) if distancia is not None else None
+        return round(distancia / 1000, 2) if distancia is not None else None
 
     def validate(self, attrs):
         minimo = attrs.get("preco_min", getattr(self.instance, "preco_min", None))
