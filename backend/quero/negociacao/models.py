@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
@@ -62,3 +63,10 @@ class Negociacao(models.Model):
         indexes = [
             models.Index(fields=("status", "atualizada_em"), name="neg_status_atual_idx"),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            status_salvo = Negociacao.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+            if status_salvo == self.Status.CONCLUIDA:
+                raise ValidationError("Negociações concluídas são imutáveis.")
+        super().save(*args, **kwargs)
