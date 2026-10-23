@@ -41,7 +41,7 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | POST | `/perfil/email` | Solicitar troca de e-mail |
 | POST | `/perfil/email/confirmar` | Confirmar troca usando token recebido por e-mail |
 | GET | `/categorias` | Listar categorias ativas |
-| GET / POST | `/anuncios` | Consultar feed geográfico / criar anúncio de procura |
+| GET / POST | `/anuncios` | Buscar no feed geográfico (ver [Busca](#busca-de-anúncios)) / criar anúncio de procura |
 | GET | `/anuncios/meus` | Listar anúncios próprios |
 | GET / PATCH | `/anuncios/{id}` | Consultar/editar anúncio próprio |
 | PATCH | `/anuncios/{id}/status` | Pausar, reativar ou encerrar anúncio |
@@ -53,6 +53,9 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | PATCH | `/produtos/{id}/status` | Marcar produto como disponível, reservado ou vendido fora de negociação |
 | POST | `/produtos/{id}/fotos` | Enviar fotos (multipart, campo `fotos` repetido); o lote é aceito por inteiro ou rejeitado |
 | DELETE | `/produtos/{id}/fotos/{foto_id}` | Remover foto |
+| GET / POST | `/buscas-salvas` | Listar / criar buscas salvas próprias |
+| GET / PATCH / PUT / DELETE | `/buscas-salvas/{id}` | Consultar / editar / remover busca salva própria |
+| GET | `/buscas-salvas/{id}/anuncios` | Executar a busca salva (mesma resposta e paginação da busca) |
 | GET | `/conversas` | Listar conversas do usuário, com não lidas e indicador de somente leitura |
 | GET | `/conversas/nao-lidas` | Total de mensagens não lidas |
 | GET / POST | `/conversas/{oferta_id}/mensagens` | Listar (paginado, `?apos=<id>` para polling) / enviar mensagem |
@@ -66,6 +69,24 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | POST | `/negociacoes/{id}/conclusao/recusa` | Comprador recusa a conclusão; a negociação continua em andamento |
 | GET | `/historico` | Negociações concluídas/canceladas (`?papel=comprador\|vendedor`, `?status=concluida\|cancelada`) |
 | GET | `/historico/{id}` | Detalhe com valores negociados e mensagens |
+
+### Busca de anúncios
+
+`GET /anuncios` só considera anúncios **ativos** cujo raio alcança a localização do usuário autenticado; pausados, encerrados e em negociação nunca aparecem, e nenhum parâmetro amplia esse conjunto. Usuários sem localização recebem lista vazia. Todos os parâmetros são opcionais e combináveis:
+
+| Parâmetro | Descrição |
+| --- | --- |
+| `q` | Palavras buscadas em título ou descrição, sem diferenciar maiúsculas; todas as palavras precisam aparecer |
+| `categoria` | Slug de uma categoria ativa |
+| `preco_min`, `preco_max` | Faixa de preço do vendedor; retorna anúncios cujo orçamento se sobrepõe a ela (limites ausentes no anúncio não restringem) |
+| `distancia_max_km` | Distância máxima até o comprador, de 1 a `RAIO_MAXIMO_KM` |
+| `ordenacao` | `distancia` (padrão), `recentes`, `preco_minimo` ou `preco_maximo` (orçamento = `preco_max`, ou `preco_min` na falta dele; anúncios sem orçamento ficam por último). Empates são desfeitos pelos mais recentes e depois pelo id |
+| `tamanho` | Itens por página, de 1 a 50 (padrão 20) |
+| `cursor` | Valor opaco recebido em `next` |
+
+Resposta: `{"count": <total que atende aos filtros>, "next": <URL da próxima página ou null>, "results": [...]}`. A paginação é por chave: cada página continua após os valores de ordenação do último item, então inserções ou remoções entre requisições não duplicam nem pulam registros. O cursor vale apenas para a ordenação em que foi gerado. Parâmetros ou cursores inválidos retornam 400 indicando o campo.
+
+Buscas salvas guardam `nome` (único por usuário), `termo`, `categoria`, `preco_min`, `preco_max`, `distancia_max_km` e `ordenacao`. Cada usuário só vê e altera as próprias; as de terceiros respondem 404. `/anuncios?meus=true` e `/anuncios/meus` continuam listando os anúncios do próprio comprador em qualquer status.
 
 O Nominatim público exige identificação no `User-Agent`, uso moderado e atribuição ao OpenStreetMap. A interface deve exibir “© OpenStreetMap contributors” quando apresentar resultados de geocodificação. Para maior volume, configure um provedor apropriado em vez do serviço público.
 

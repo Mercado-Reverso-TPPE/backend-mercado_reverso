@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from quero.anuncios.views import AnuncioViewSet, CategoriaListView
 from quero.catalogo.views import ProdutoViewSet
+from quero.descoberta.views import BuscaSalvaViewSet
 from quero.contas.views import CadastroView, ConfirmarAlteracaoEmailView, ConfirmarRedefinicaoSenhaView, PerfilView, SolicitarAlteracaoEmailView, SolicitarRedefinicaoSenhaView
 from quero.contas.serializers import LoginSerializer
 from quero.moderacao.views import BloqueioDetailView, BloqueiosView, DenunciasConversaView
@@ -31,6 +32,7 @@ from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAn
 router = DefaultRouter(trailing_slash=False)
 router.register("anuncios", AnuncioViewSet, basename="anuncio")
 router.register("produtos", ProdutoViewSet, basename="produto")
+router.register("buscas-salvas", BuscaSalvaViewSet, basename="busca-salva")
 
 
 class SessoesView(TokenObtainPairView):
