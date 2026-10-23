@@ -42,6 +42,7 @@ SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(minutes=15), "REFRESH_TOKEN_LIF
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
 RAIO_PADRAO_KM = int(os.getenv("RAIO_PADRAO_KM", "20"))
 RAIO_MAXIMO_KM = int(os.getenv("RAIO_MAXIMO_KM", "200"))
+NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS = int(os.getenv("NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS", "72"))
 LOGIN_MAX_TENTATIVAS = int(os.getenv("LOGIN_MAX_TENTATIVAS", "5"))
 LOGIN_BLOQUEIO_MINUTOS = int(os.getenv("LOGIN_BLOQUEIO_MINUTOS", "15"))
 GEOCODER_URL = os.getenv("GEOCODER_URL", "https://nominatim.openstreetmap.org")

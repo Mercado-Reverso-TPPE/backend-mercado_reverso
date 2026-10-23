@@ -5,6 +5,7 @@ from django.db import IntegrityError, transaction
 from quero.anuncios.models import Anuncio
 from quero.catalogo.models import Produto
 from quero.catalogo.services import copiar_foto_para_snapshot
+from quero.moderacao.services import bloqueio_entre
 
 from .models import EventoNegociacao, Oferta
 
@@ -20,6 +21,8 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
         raise ValidationError("Só é possível ofertar em anúncios ativos.")
     if anuncio.comprador_id == vendedor.pk:
         raise ValidationError("Não é possível ofertar no próprio anúncio.")
+    if bloqueio_entre(anuncio.comprador_id, vendedor.pk):
+        raise ValidationError("Não é possível ofertar neste anúncio: há um bloqueio entre você e o comprador.")
     ponto_vendedor = vendedor.ponto
     if ponto_vendedor is None:
         raise ValidationError("Cadastre uma localização antes de enviar uma oferta.")
