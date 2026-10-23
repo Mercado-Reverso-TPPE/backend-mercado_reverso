@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from rest_framework import permissions, status
@@ -8,12 +10,16 @@ from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from quero.anuncios.views import AnuncioViewSet, CategoriaListView
+from quero.catalogo.views import ProdutoViewSet
+from quero.descoberta.views import BuscaSalvaViewSet
 from quero.contas.views import CadastroView, ConfirmarAlteracaoEmailView, ConfirmarRedefinicaoSenhaView, PerfilView, SolicitarAlteracaoEmailView, SolicitarRedefinicaoSenhaView
 from quero.contas.serializers import LoginSerializer
 from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
 
 router = DefaultRouter(trailing_slash=False)
 router.register("anuncios", AnuncioViewSet, basename="anuncio")
+router.register("produtos", ProdutoViewSet, basename="produto")
+router.register("buscas-salvas", BuscaSalvaViewSet, basename="busca-salva")
 
 
 class SessoesView(TokenObtainPairView):
@@ -49,3 +55,6 @@ urlpatterns = [
     path("api/v1/ofertas/<uuid:oferta_id>", OfertaDetailView.as_view(), name="detalhe-oferta"),
     path("api/v1/", include(router.urls)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

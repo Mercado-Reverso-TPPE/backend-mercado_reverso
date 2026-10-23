@@ -1,4 +1,3 @@
-from django.contrib.gis.db.models.functions import Distance
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count, Q
@@ -8,6 +7,9 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.pagination import CursorPagination
+from quero.descoberta.paginacao import PaginacaoPorChave
+from quero.descoberta.serializers import FiltrosBuscaSerializer
+from quero.descoberta.services import anuncios_visiveis, buscar_anuncios
 from .models import Anuncio, Categoria
 from .serializers import AnuncioSerializer, AlteracaoStatusSerializer, CategoriaSerializer
 from .services import alterar_status_anuncio
@@ -26,38 +28,31 @@ class AnuncioViewSet(viewsets.ModelViewSet):
     serializer_class = AnuncioSerializer
     pagination_class = AnuncioPagination
 
-    def paginate_queryset(self, queryset):
-        page = self.paginator
-        if page is None:
-            return None
-        if self.action == "list" and self.request.query_params.get("meus") != "true":
-            page.ordering = ("distancia_m", "-criado_em")
-        else:
-            page.ordering = "-criado_em"
-        return page.paginate_queryset(queryset, self.request, view=self)
-
     def get_permissions(self):
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
+        meus = self.action == "meus" or self.request.query_params.get("meus") == "true"
+        if self.action in ("list", "retrieve") and not meus:
+            return anuncios_visiveis(user)
         qs = Anuncio.objects.select_related("comprador", "categoria").annotate(
             ofertas_ativas=Count("ofertas", filter=Q(ofertas__status__in=("enviada", "aceita")), distinct=True)
         )
-        if self.action == "meus":
-            return qs.filter(comprador=user)
-        if self.action in ("list", "retrieve"):
-            if self.request.query_params.get("meus") == "true":
-                return qs.filter(comprador=user)
-            if user.ponto is None:
-                return qs.none()
-            return qs.filter(
-                status=Anuncio.Status.ATIVO,
-                alcance__intersects=user.ponto,
-            ).annotate(
-                distancia_m=Distance("comprador__ponto", user.ponto)
-            ).order_by("distancia_m", "-criado_em")
         return qs.filter(comprador=user)
+
+    def list(self, request, *args, **kwargs):
+        if request.query_params.get("meus") == "true":
+            return self.meus(request)
+        filtros = FiltrosBuscaSerializer(data=request.query_params)
+        filtros.is_valid(raise_exception=True)
+        paginador = PaginacaoPorChave()
+        pagina = paginador.paginar(
+            buscar_anuncios(usuario=request.user, **filtros.filtros()),
+            request,
+            filtros.validated_data["ordenacao"],
+        )
+        return paginador.resposta(self.get_serializer(pagina, many=True).data)
 
     def perform_create(self, serializer):
         serializer.save()

@@ -1,7 +1,10 @@
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.db import IntegrityError, transaction
 
 from quero.anuncios.models import Anuncio
+from quero.catalogo.models import Produto
+from quero.catalogo.services import copiar_foto_para_snapshot
 
 from .models import EventoNegociacao, Oferta
 
@@ -25,10 +28,19 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
     if not esta_no_raio:
         raise ValidationError("Sua localização está fora do raio deste anúncio.")
 
+    dados = dados.copy()
+    produto_id = dados.pop("produto_id", None)
+    if produto_id is not None:
+        dados.update(_snapshot_do_produto(vendedor=vendedor, produto_id=produto_id, dados=dados))
+    elif any(dados.get(campo) in (None, "") for campo in CAMPOS_COPIADOS_DO_PRODUTO):
+        raise ValidationError("Informe descrição, estado de conservação e preço ou escolha um produto do catálogo.")
+
     try:
         with transaction.atomic():
             oferta = Oferta.objects.create(anuncio=anuncio, vendedor=vendedor, **dados)
     except IntegrityError as exc:
+        if dados.get("foto_produto_snapshot"):
+            default_storage.delete(dados["foto_produto_snapshot"])
         raise ValidationError("Você já tem uma oferta ativa neste anúncio.") from exc
 
     EventoNegociacao.objects.create(
@@ -39,6 +51,25 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
         tipo_evento=EventoNegociacao.TipoEvento.ENVIADA,
     )
     return oferta
+
+
+CAMPOS_COPIADOS_DO_PRODUTO = ("descricao", "estado_conservacao", "preco")
+
+
+def _snapshot_do_produto(*, vendedor, produto_id, dados):
+    """Copia os dados do produto para a oferta; edições futuras no catálogo não a afetam."""
+    produto = Produto.objects.select_for_update().filter(pk=produto_id, vendedor=vendedor).first()
+    if produto is None:
+        raise ValidationError("O produto não existe no seu catálogo.")
+    if produto.status != Produto.Status.DISPONIVEL:
+        raise ValidationError("Só é possível ofertar produtos disponíveis.")
+    snapshot = {campo: dados.get(campo) or getattr(produto, campo) for campo in CAMPOS_COPIADOS_DO_PRODUTO}
+    snapshot.update(
+        produto=produto,
+        nome_produto_snapshot=produto.nome,
+        foto_produto_snapshot=copiar_foto_para_snapshot(produto),
+    )
+    return snapshot
 
 
 @transaction.atomic
