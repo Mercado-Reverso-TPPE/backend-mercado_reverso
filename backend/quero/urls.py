@@ -15,6 +15,14 @@ from quero.descoberta.views import BuscaSalvaViewSet
 from quero.contas.views import CadastroView, ConfirmarAlteracaoEmailView, ConfirmarRedefinicaoSenhaView, PerfilView, SolicitarAlteracaoEmailView, SolicitarRedefinicaoSenhaView
 from quero.contas.serializers import LoginSerializer
 from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
+from quero.reputacao.views import (
+    AvaliacoesDoUsuarioView,
+    AvaliacoesNegociacaoView,
+    DetalheFilaModeracaoAvaliacaoView,
+    DenunciaAvaliacaoView,
+    FilaModeracaoAvaliacaoView,
+    RespostaAvaliacaoView,
+)
 
 router = DefaultRouter(trailing_slash=False)
 router.register("anuncios", AnuncioViewSet, basename="anuncio")
@@ -53,6 +61,12 @@ urlpatterns = [
     path("api/v1/anuncios/<uuid:anuncio_id>/ofertas", OfertasDoAnuncioView.as_view(), name="ofertas-do-anuncio"),
     path("api/v1/ofertas/meus", MinhasOfertasView.as_view(), name="minhas-ofertas"),
     path("api/v1/ofertas/<uuid:oferta_id>", OfertaDetailView.as_view(), name="detalhe-oferta"),
+    path("api/v1/usuarios/<uuid:avaliado_id>/avaliacoes", AvaliacoesDoUsuarioView.as_view(), name="avaliacoes-do-usuario"),
+    path("api/v1/negociacoes/<uuid:negociacao_id>/avaliacoes", AvaliacoesNegociacaoView.as_view(), name="criar-avaliacao"),
+    path("api/v1/avaliacoes/<uuid:avaliacao_id>/resposta", RespostaAvaliacaoView.as_view(), name="resposta-avaliacao"),
+    path("api/v1/avaliacoes/<uuid:avaliacao_id>/denuncias", DenunciaAvaliacaoView.as_view(), name="denuncia-avaliacao"),
+    path("api/v1/moderacao/avaliacoes", FilaModeracaoAvaliacaoView.as_view(), name="fila-moderacao-avaliacoes"),
+    path("api/v1/moderacao/avaliacoes/<uuid:acao_id>", DetalheFilaModeracaoAvaliacaoView.as_view(), name="detalhe-moderacao-avaliacao"),
     path("api/v1/", include(router.urls)),
 ]
 
