@@ -9,10 +9,9 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from quero.anuncios.views import AnuncioViewSet, CategoriaListView
-from quero.catalogo.views import ProdutoViewSet
-from quero.contas.serializers import LoginSerializer
-from quero.contas.views import (
+from quero.anuncios.controllers import AnuncioViewSet, CategoriaListView
+from quero.catalogo.controllers import ProdutoViewSet
+from quero.contas.controllers import (
     CadastroView,
     ConfirmarAlteracaoEmailView,
     ConfirmarRedefinicaoSenhaView,
@@ -20,9 +19,10 @@ from quero.contas.views import (
     SolicitarAlteracaoEmailView,
     SolicitarRedefinicaoSenhaView,
 )
-from quero.descoberta.views import BuscaSalvaViewSet
-from quero.moderacao.views import BloqueioDetailView, BloqueiosView, DenunciasConversaView
-from quero.negociacao.views import (
+from quero.contas.views import LoginSerializer
+from quero.descoberta.controllers import BuscaSalvaViewSet
+from quero.moderacao.controllers import BloqueioDetailView, BloqueiosView, DenunciasConversaView
+from quero.negociacao.controllers import (
     ConfirmarConclusaoView,
     ConversasView,
     HistoricoDetailView,
@@ -34,8 +34,8 @@ from quero.negociacao.views import (
     RecusarConclusaoView,
     SolicitarConclusaoView,
 )
-from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
-from quero.reputacao.views import (
+from quero.ofertas.controllers import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
+from quero.reputacao.controllers import (
     AvaliacoesDoUsuarioView,
     AvaliacoesNegociacaoView,
     DenunciaAvaliacaoView,

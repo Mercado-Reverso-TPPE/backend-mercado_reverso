@@ -56,9 +56,7 @@ def test_cadastro_geocodifica_cep_ou_cidade_sem_chamar_servico_externo(
     cliente_api, dados_localizacao, consulta_esperada
 ):
     ponto = Point(-46.6333, -23.5505, srid=4326)
-    with patch(
-        "quero.contas.serializers.geocodificar", return_value=(ponto, "01001-000", "São Paulo", "SP")
-    ) as geocodificar:
+    with patch("quero.contas.views.geocodificar", return_value=(ponto, "01001-000", "São Paulo", "SP")) as geocodificar:
         resposta = cliente_api.post(
             "/api/v1/usuarios",
             {

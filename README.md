@@ -90,7 +90,7 @@ Buscas salvas guardam `nome` (único por usuário), `termo`, `categoria`, `preco
 
 O Nominatim público exige identificação no `User-Agent`, uso moderado e atribuição ao OpenStreetMap. A interface deve exibir “© OpenStreetMap contributors” quando apresentar resultados de geocodificação. Para maior volume, configure um provedor apropriado em vez do serviço público.
 
-As regras de negócio ficam em `services.py`; os modelos representam os dados, serializers validam entrada e saída, e views tratam HTTP e autorização. Migrações existentes preservam os dados dos anúncios já cadastrados ao introduzir o catálogo de categorias.
+Cada app segue MVC com camadas: `models.py` (Model) representa os dados; `views.py` (View) contém os serializers que validam a entrada e formatam a saída; `controllers.py` (Controller) trata HTTP e autorização; e `services.py` concentra as regras de negócio. Migrações existentes preservam os dados dos anúncios já cadastrados ao introduzir o catálogo de categorias.
 
 O schema de domínio tem no máximo 15 modelos/tabelas próprios, com dados relacionais normalizados; tabelas internas do Django e tabelas auxiliares do PostgreSQL/PostGIS não entram nessa contagem. Localização de referência é atributo 1:1 do usuário, eventos de negociação reúnem histórico de preço, contrapropostas e mensagens, e o alcance geográfico é materializado apenas para indexação GiST.
 

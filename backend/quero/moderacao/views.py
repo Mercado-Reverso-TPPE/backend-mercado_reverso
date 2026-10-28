@@ -1,61 +1,24 @@
-from django.core.exceptions import ValidationError as DjangoValidationError
-from rest_framework import permissions, status
-from rest_framework.exceptions import ValidationError
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework import serializers
 
-from quero.negociacao.services import obter_conversa
-
-from .serializers import BloqueioSerializer, DenunciaConversaSerializer
-from .services import bloquear_usuario, bloqueios_do_usuario, denunciar_conversa, desbloquear_usuario
+from .models import AcaoModeracao
 
 
-class BloqueiosView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class BloqueioSerializer(serializers.ModelSerializer):
+    usuario_id = serializers.UUIDField(source="alvo_id")
+    usuario_nome = serializers.CharField(source="alvo.nome", read_only=True)
 
-    def get(self, request):
-        bloqueios = bloqueios_do_usuario(request.user).order_by("-criada_em")
-        return Response(BloqueioSerializer(bloqueios, many=True).data)
-
-    def post(self, request):
-        serializer = BloqueioSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            bloqueio = bloquear_usuario(
-                autor=request.user,
-                alvo_id=serializer.validated_data["alvo_id"],
-                motivo=serializer.validated_data.get("motivo", ""),
-            )
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(BloqueioSerializer(bloqueio).data, status=status.HTTP_201_CREATED)
+    class Meta:
+        model = AcaoModeracao
+        fields = ("id", "usuario_id", "usuario_nome", "motivo", "estado", "criada_em")
+        read_only_fields = ("id", "usuario_nome", "estado", "criada_em")
 
 
-class BloqueioDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class DenunciaConversaSerializer(serializers.ModelSerializer):
+    conversa_id = serializers.UUIDField(source="oferta_id", read_only=True)
+    mensagem_id = serializers.IntegerField(source="evento_id", required=False, allow_null=True)
+    motivo = serializers.CharField(max_length=2000)
 
-    def delete(self, request, usuario_id):
-        try:
-            desbloquear_usuario(autor=request.user, alvo_id=usuario_id)
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class DenunciasConversaView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, oferta_id):
-        oferta = obter_conversa(oferta_id=oferta_id, usuario=request.user)
-        serializer = DenunciaConversaSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            denuncia = denunciar_conversa(
-                autor=request.user,
-                oferta=oferta,
-                motivo=serializer.validated_data["motivo"],
-                mensagem_id=serializer.validated_data.get("evento_id"),
-            )
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(DenunciaConversaSerializer(denuncia).data, status=status.HTTP_201_CREATED)
+    class Meta:
+        model = AcaoModeracao
+        fields = ("id", "conversa_id", "mensagem_id", "motivo", "estado", "criada_em")
+        read_only_fields = ("id", "conversa_id", "estado", "criada_em")

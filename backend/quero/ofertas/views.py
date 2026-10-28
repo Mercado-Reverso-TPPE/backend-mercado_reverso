@@ -1,91 +1,73 @@
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status
-from rest_framework.exceptions import ValidationError
-from rest_framework.pagination import CursorPagination
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from decimal import Decimal
 
-from quero.anuncios.models import Anuncio
+from django.core.files.storage import default_storage
+from rest_framework import serializers
 
-from .models import Oferta
-from .serializers import OfertaSerializer
-from .services import editar_oferta, enviar_oferta, retirar_oferta
+from .models import EventoNegociacao, Oferta
 
 
-class OfertaPagination(CursorPagination):
-    page_size = 20
-    ordering = "-criada_em"
+class EventoNegociacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventoNegociacao
+        fields = ("preco", "status", "tipo_evento", "justificativa", "rodada", "registrado_em")
+        read_only_fields = fields
 
 
-class OfertasDoAnuncioView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class OfertaSerializer(serializers.ModelSerializer):
+    anuncio_id = serializers.UUIDField(read_only=True)
+    vendedor_id = serializers.UUIDField(read_only=True)
+    vendedor_nome = serializers.CharField(source="vendedor.nome", read_only=True)
+    historico = serializers.SerializerMethodField()
+    preco = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"), required=False)
+    produto_id = serializers.UUIDField(required=False)
+    produto_nome = serializers.CharField(source="nome_produto_snapshot", read_only=True)
+    produto_foto = serializers.SerializerMethodField()
 
-    def get(self, request, anuncio_id):
-        anuncio = get_object_or_404(Anuncio, pk=anuncio_id)
-        ofertas = Oferta.objects.filter(anuncio=anuncio).select_related("vendedor").prefetch_related("eventos")
-        if anuncio.comprador_id == request.user.pk:
-            ofertas = ofertas.filter(
-                status__in=(
-                    Oferta.Status.ENVIADA,
-                    Oferta.Status.EM_NEGOCIACAO,
-                    Oferta.Status.ACEITA,
-                )
-            )
-        else:
-            ofertas = ofertas.filter(vendedor=request.user)
-        paginator = OfertaPagination()
-        pagina = paginator.paginate_queryset(ofertas, request, view=self)
-        return paginator.get_paginated_response(OfertaSerializer(pagina, many=True).data)
-
-    def post(self, request, anuncio_id):
-        serializer = OfertaSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            oferta = enviar_oferta(
-                vendedor=request.user,
-                anuncio_id=anuncio_id,
-                dados=serializer.validated_data,
-            )
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(OfertaSerializer(oferta).data, status=status.HTTP_201_CREATED)
-
-
-class OfertaDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_oferta(self, request, oferta_id):
-        return get_object_or_404(Oferta, pk=oferta_id, vendedor=request.user)
-
-    def patch(self, request, oferta_id):
-        oferta = self.get_oferta(request, oferta_id)
-        serializer = OfertaSerializer(oferta, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        try:
-            oferta = editar_oferta(oferta=oferta, vendedor=request.user, dados=serializer.validated_data)
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(OfertaSerializer(oferta).data)
-
-    def delete(self, request, oferta_id):
-        oferta = self.get_oferta(request, oferta_id)
-        try:
-            retirar_oferta(oferta=oferta, vendedor=request.user)
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class MinhasOfertasView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        ofertas = (
-            Oferta.objects.filter(vendedor=request.user)
-            .select_related("anuncio", "anuncio__categoria")
-            .prefetch_related("eventos")
+    class Meta:
+        model = Oferta
+        fields = (
+            "id",
+            "anuncio_id",
+            "vendedor_id",
+            "vendedor_nome",
+            "produto_id",
+            "produto_nome",
+            "produto_foto",
+            "descricao",
+            "estado_conservacao",
+            "preco",
+            "status",
+            "criada_em",
+            "atualizada_em",
+            "historico",
         )
-        paginator = OfertaPagination()
-        pagina = paginator.paginate_queryset(ofertas, request, view=self)
-        return paginator.get_paginated_response(OfertaSerializer(pagina, many=True).data)
+        read_only_fields = (
+            "id",
+            "anuncio_id",
+            "vendedor_id",
+            "vendedor_nome",
+            "produto_nome",
+            "produto_foto",
+            "status",
+            "criada_em",
+            "atualizada_em",
+            "historico",
+        )
+        extra_kwargs = {"descricao": {"required": False}, "estado_conservacao": {"required": False}}
+
+    def get_produto_foto(self, obj):
+        if not obj.foto_produto_snapshot:
+            return None
+        url = default_storage.url(obj.foto_produto_snapshot)
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+    def get_historico(self, obj):
+        # Mensagens do chat têm endpoint próprio e não fazem parte do histórico de preços.
+        eventos = [e for e in obj.eventos.all() if e.tipo_evento != EventoNegociacao.TipoEvento.MENSAGEM]
+        return EventoNegociacaoSerializer(eventos, many=True).data
+
+    def validate(self, attrs):
+        if self.instance is not None and "produto_id" in attrs:
+            raise serializers.ValidationError({"produto_id": "O produto de uma oferta enviada não pode ser trocado."})
+        return attrs
