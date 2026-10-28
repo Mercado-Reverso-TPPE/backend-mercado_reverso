@@ -81,7 +81,11 @@ class MinhasOfertasView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        ofertas = Oferta.objects.filter(vendedor=request.user).select_related("anuncio", "anuncio__categoria").prefetch_related("eventos")
+        ofertas = (
+            Oferta.objects.filter(vendedor=request.user)
+            .select_related("anuncio", "anuncio__categoria")
+            .prefetch_related("eventos")
+        )
         paginator = OfertaPagination()
         pagina = paginator.paginate_queryset(ofertas, request, view=self)
         return paginator.get_paginated_response(OfertaSerializer(pagina, many=True).data)

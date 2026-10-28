@@ -2,17 +2,20 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count, Q
 from rest_framework import permissions, status, viewsets
-from rest_framework.generics import ListAPIView
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.response import Response
+from rest_framework.generics import ListAPIView
 from rest_framework.pagination import CursorPagination
+from rest_framework.response import Response
+
 from quero.descoberta.paginacao import PaginacaoPorChave
 from quero.descoberta.serializers import FiltrosBuscaSerializer
 from quero.descoberta.services import anuncios_visiveis, buscar_anuncios
+
 from .models import Anuncio, Categoria
-from .serializers import AnuncioSerializer, AlteracaoStatusSerializer, CategoriaSerializer
+from .serializers import AlteracaoStatusSerializer, AnuncioSerializer, CategoriaSerializer
 from .services import alterar_status_anuncio
+
 
 class AnuncioPagination(CursorPagination):
     page_size = 20
@@ -23,6 +26,7 @@ class CategoriaListView(ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = CategoriaSerializer
     queryset = Categoria.objects.filter(ativa=True)
+
 
 class AnuncioViewSet(viewsets.ModelViewSet):
     serializer_class = AnuncioSerializer

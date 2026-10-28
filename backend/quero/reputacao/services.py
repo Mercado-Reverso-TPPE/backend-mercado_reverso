@@ -68,7 +68,7 @@ def _tentar_publicar_par(negociacao: Negociacao):
     Deve ser chamada dentro de uma transação atômica.
     """
     avaliacoes = list(Avaliacao.objects.filter(negociacao=negociacao, publicada_em__isnull=True))
-    if len(avaliacoes) == 2:  # noqa: PLR2004
+    if len(avaliacoes) == 2:
         agora = timezone.now()
         for av in avaliacoes:
             av.publicada_em = agora

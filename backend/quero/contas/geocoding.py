@@ -6,8 +6,8 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.conf import settings
-from django.core.cache import cache
 from django.contrib.gis.geos import Point
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 
 
@@ -41,7 +41,14 @@ def _buscar_no_nominatim(*, cep, cidade, uf):
     resultado = resultados[0]
     endereco = resultado.get("address", {})
     codigo_uf = endereco.get("ISO3166-2-lvl4", "").removeprefix("BR-")
-    cidade_encontrada = (cidade or endereco.get("city") or endereco.get("town") or endereco.get("village") or endereco.get("municipality") or "").strip()
+    cidade_encontrada = (
+        cidade
+        or endereco.get("city")
+        or endereco.get("town")
+        or endereco.get("village")
+        or endereco.get("municipality")
+        or ""
+    ).strip()
     uf_encontrada = (uf or codigo_uf).upper()
     cep_encontrado = (cep or endereco.get("postcode", "")).strip()
     ponto = Point(float(resultado["lon"]), float(resultado["lat"]), srid=4326)

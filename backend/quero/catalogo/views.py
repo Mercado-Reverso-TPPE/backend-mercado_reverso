@@ -8,8 +8,20 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from .models import Produto
-from .serializers import AlteracaoStatusProdutoSerializer, FotoProdutoSerializer, ProdutoSerializer, UploadFotosSerializer
-from .services import adicionar_fotos, alterar_status_produto_pelo_vendedor, atualizar_produto, criar_produto, excluir_produto, remover_foto
+from .serializers import (
+    AlteracaoStatusProdutoSerializer,
+    FotoProdutoSerializer,
+    ProdutoSerializer,
+    UploadFotosSerializer,
+)
+from .services import (
+    adicionar_fotos,
+    alterar_status_produto_pelo_vendedor,
+    atualizar_produto,
+    criar_produto,
+    excluir_produto,
+    remover_foto,
+)
 
 
 class ProdutoPagination(CursorPagination):
@@ -52,7 +64,9 @@ class ProdutoViewSet(viewsets.ModelViewSet):
         serializer = AlteracaoStatusProdutoSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            produto = alterar_status_produto_pelo_vendedor(produto=produto, novo_status=serializer.validated_data["status"])
+            produto = alterar_status_produto_pelo_vendedor(
+                produto=produto, novo_status=serializer.validated_data["status"]
+            )
         except DjangoValidationError as exc:
             raise ValidationError(exc.messages) from exc
         return Response(self.get_serializer(self.get_queryset().get(pk=produto.pk)).data)

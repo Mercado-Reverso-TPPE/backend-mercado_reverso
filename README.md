@@ -77,8 +77,19 @@ As regras de negócio ficam em `services.py`; os modelos representam os dados, s
 
 O schema de domínio tem no máximo 15 modelos/tabelas próprios, com dados relacionais normalizados; tabelas internas do Django e tabelas auxiliares do PostgreSQL/PostGIS não entram nessa contagem. Localização de referência é atributo 1:1 do usuário, eventos de negociação reúnem histórico de preço, contrapropostas e mensagens, e o alcance geográfico é materializado apenas para indexação GiST.
 
+O modelo físico (diagrama entidade-relacionamento e DDL) está em [`docs/modelo-fisico.md`](docs/modelo-fisico.md) e [`docs/schema.sql`](docs/schema.sql).
+
 ## Testes
 
 Os testes parametrizados ficam em `backend/tests` e usam `pytest-django`. Com os serviços iniciados, execute `docker compose exec backend pytest`. A suíte usa banco PostGIS de teste criado pelo Django; chamadas ao serviço externo de geocodificação são substituídas por respostas simuladas.
+
+## Lint
+
+O lint e a formatação usam o [ruff](https://docs.astral.sh/ruff/), configurado em `backend/pyproject.toml`. O CI falha se houver aviso ou arquivo fora do padrão.
+
+```sh
+docker compose exec backend ruff check .          # lint
+docker compose exec backend ruff format .         # formata o código
+```
 
 Este compose é para desenvolvimento local. Troque as credenciais padrão antes de expor os serviços fora da máquina local.
