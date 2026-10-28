@@ -19,8 +19,10 @@ Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.
 - Consulta e atualização do perfil/localização; troca de e-mail mediante confirmação. Atualizar a localização recalcula o centro geográfico dos anúncios ativos e pausados.
 - Geocodificação de CEP/cidade para coordenadas, com cache configurável (em memória no desenvolvimento e Redis compartilhado em produção). O serviço padrão é o Nominatim público do OpenStreetMap, configurável por `GEOCODER_URL` e `GEOCODER_USER_AGENT`.
 - Catálogo de categorias, anúncios de procura, feed por alcance/distância, gerenciamento de status e contagem de ofertas.
-- Envio, consulta, edição e retirada de ofertas; histórico de preços e restrição de visibilidade para impedir que vendedores vejam ofertas concorrentes.
+- Envio, consulta, edição, retirada, decisão e contrapropostas de ofertas; histórico de preços e restrição de visibilidade para impedir que vendedores vejam ofertas concorrentes.
+- Palpites anônimos de preço por anúncio: vendedores no raio podem criar ou substituir o próprio palpite; o comprador só recebe mínimo, média e máximo após três vendedores distintos.
 - Catálogo do vendedor: CRUD de produtos restrito ao proprietário, upload de fotos com limites de quantidade, tamanho e formato (`PRODUTO_FOTOS_MAXIMO`, `PRODUTO_FOTO_TAMANHO_MAXIMO_MB`; JPEG, PNG ou WEBP) e status disponível/reservado/vendido. O produto fica reservado enquanto há negociação em andamento, volta a ficar disponível se ela for cancelada e passa a vendido quando é concluída. Ofertas podem usar um produto disponível do catálogo; nome, descrição, estado, preço e foto de capa são copiados para a oferta, e alterações ou exclusões posteriores do produto não alteram ofertas já enviadas.
+- Recomendações determinísticas e explicáveis de produtos de catálogo para anúncios, com convite persistente ao vendedor que não cria oferta nem negociação.
 - Chat de negociação: cada oferta é a conversa entre o comprador do anúncio e o vendedor. Mensagens são imutáveis, consultadas por polling (`?apos=<id>`), com contagem e marcação de não lidas. A conversa fica somente leitura quando a oferta é retirada/recusada, o anúncio é encerrado ou a negociação termina.
 - Denúncia de conversa e bloqueio/desbloqueio de usuários. Um bloqueio ativo, em qualquer sentido, impede novas mensagens e novas ofertas entre as duas pessoas, sem apagar o histórico.
 - Conclusão bilateral: o vendedor solicita e o comprador confirma ou recusa dentro de `NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS` (padrão 72 h); vencido o prazo, a conclusão é confirmada automaticamente. Concluir encerra o anúncio, marca o produto ofertado como vendido, torna a negociação imutável e convida as partes a avaliar.
@@ -46,8 +48,15 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | GET / PATCH | `/anuncios/{id}` | Consultar/editar anúncio próprio |
 | PATCH | `/anuncios/{id}/status` | Pausar, reativar ou encerrar anúncio |
 | GET / POST | `/anuncios/{id}/ofertas` | Listar ofertas visíveis / enviar oferta (opcionalmente com `produto_id` do catálogo) |
+| POST | `/anuncios/{id}/palpite` | Criar ou substituir o palpite de preço do vendedor |
+| GET | `/anuncios/{id}/estimativa-preco` | Consultar a estimativa anônima (somente o comprador; disponível a partir de três vendedores) |
 | GET | `/ofertas/meus` | Listar ofertas enviadas |
-| PATCH / DELETE | `/ofertas/{id}` | Editar / retirar oferta ainda não aceita |
+| GET / PATCH / DELETE | `/ofertas/{id}` | Consultar / editar / retirar oferta ainda não aceita |
+| POST | `/ofertas/{id}/contrapropostas` | Enviar contraproposta |
+| POST | `/ofertas/{id}/contrapropostas/responder` | Aceitar, recusar ou responder com novo valor à contraproposta aberta |
+| POST | `/ofertas/{id}/aceitar` | Aceitar a oferta e iniciar negociação |
+| POST | `/ofertas/{id}/recusar` | Recusar a oferta (motivo visível somente ao destinatário) |
+| POST | `/negociacoes/{id}/cancelar` | Cancelar a negociação em andamento e reabrir o anúncio |
 | GET / POST | `/produtos` | Listar (filtro opcional `?status=`) / cadastrar produtos do catálogo próprio |
 | GET / PATCH / DELETE | `/produtos/{id}` | Consultar / editar / excluir produto próprio |
 | PATCH | `/produtos/{id}/status` | Marcar produto como disponível, reservado ou vendido fora de negociação |
@@ -56,6 +65,37 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | GET / POST | `/buscas-salvas` | Listar / criar buscas salvas próprias |
 | GET / PATCH / PUT / DELETE | `/buscas-salvas/{id}` | Consultar / editar / remover busca salva própria |
 | GET | `/buscas-salvas/{id}/anuncios` | Executar a busca salva (mesma resposta e paginação da busca) |
+| GET | `/anuncios/{id}/recomendacoes` | Consultar recomendações próprias, incluindo pontuação e fatores explicativos |
+| POST | `/anuncios/{id}/recomendacoes/{recomendacao_id}/descartar` | Descartar recomendação de forma persistente |
+| POST | `/anuncios/{id}/recomendacoes/{recomendacao_id}/convidar` | Enviar convite persistente ao vendedor, sem criar oferta |
+
+### Recomendações de produtos
+
+Somente o comprador do anúncio pode consultar, descartar ou convidar vendedores. Os candidatos são produtos **disponíveis** de vendedores ativos, com localização dentro do alcance geográfico do anúncio; produtos que já tenham sido usados em qualquer oferta para o anúncio são excluídos. Essa elegibilidade é revalidada na consulta e no convite, de modo que produtos vendidos, reservados, fora do raio ou de vendedores desativados deixam de aparecer sem esperar uma atualização. Recomendações descartadas permanecem descartadas mesmo após recálculos.
+
+A pontuação é determinística, de 0 a 100, sem modelo de machine learning. É uma média ponderada normalizada dos seguintes componentes:
+
+- **Categoria**: 100 para a mesma categoria, 0 para outra.
+- **Palavras-chave**: percentual de termos relevantes únicos do título e descrição do anúncio encontrados no nome/descrição do produto; palavras comuns em português são ignoradas.
+- **Preço**: 100 dentro da faixa; fora dela, reduz linearmente em relação à diferença até o limite mais próximo, com mínimo zero. Sem faixa informada, usa 50 (neutro).
+- **Distância**: decresce linearmente de 100 no centro a 0 no limite do raio.
+
+Os pesos padrão são categoria 40, palavras-chave 25, preço 20 e distância 15. Podem ser ajustados no ambiente por `PESO_RECOMENDACAO_CATEGORIA`, `PESO_RECOMENDACAO_PALAVRAS_CHAVE`, `PESO_RECOMENDACAO_PRECO` e `PESO_RECOMENDACAO_DISTANCIA`; devem ser não negativos e ao menos um deve ser maior que zero. Cada resposta inclui a pontuação agregada e o detalhamento dos componentes, com termos coincidentes e distância utilizada.
+
+O `GET` não calcula recomendações em linha: ele retorna resultados persistidos (possivelmente vazios na primeira leitura) e enfileira em colunas do anúncio um recálculo quando necessário, com atualização a cada cinco minutos. Em produção, execute um worker persistente junto à API:
+
+```sh
+docker compose exec backend python manage.py refresh_recommendations
+```
+
+O worker busca e reivindica itens com bloqueio de linha, e falhas são registradas no anúncio e tentadas novamente com espera exponencial (até uma hora), no máximo `RECOMENDACOES_MAXIMO_TENTATIVAS` vezes (padrão 5). Esgotadas as tentativas, o anúncio sai da fila mantendo o último erro em `recomendacoes_ultimo_erro`; `--enqueue-all` ou uma nova consulta o reenfileiram. Para processar a fila pronta e sair, use `--once`; para reenfileirar anúncios ativos desatualizados, `--enqueue-all`; para antecipar novas tentativas com falha, `--retry-failed`. Exemplo de recuperação manual:
+
+```sh
+docker compose exec backend python manage.py refresh_recommendations --retry-failed --once
+```
+
+Um convite gera uma notificação para o vendedor e atualiza o estado persistido da recomendação. O vendedor ainda precisa enviar sua oferta explicitamente pelo fluxo de ofertas existente; convite nunca abre negociação.
+
 | GET | `/conversas` | Listar conversas do usuário, com não lidas e indicador de somente leitura |
 | GET | `/conversas/nao-lidas` | Total de mensagens não lidas |
 | GET / POST | `/conversas/{oferta_id}/mensagens` | Listar (paginado, `?apos=<id>` para polling) / enviar mensagem |
@@ -88,11 +128,34 @@ Resposta: `{"count": <total que atende aos filtros>, "next": <URL da próxima p�
 
 Buscas salvas guardam `nome` (único por usuário), `termo`, `categoria`, `preco_min`, `preco_max`, `distancia_max_km` e `ordenacao`. Cada usuário só vê e altera as próprias; as de terceiros respondem 404. `/anuncios?meus=true` e `/anuncios/meus` continuam listando os anúncios do próprio comprador em qualquer status.
 
+Contrapropostas são compartilhadas entre comprador e vendedor, com uma contraproposta aberta por oferta e limite configurável por `CONTRAPROPOSTA_LIMITE_RODADAS` (padrão 5) e `CONTRAPROPOSTA_PRAZO_HORAS` (padrão 48). Respostas fora do prazo expiram a contraproposta sem alterar o preço ofertado. O prazo é aplicado nas ações da API; para atualizar também o histórico de ofertas sem novas requisições, agende `python backend/manage.py expirar_contrapropostas`. Aceitar uma oferta ou contraproposta cria uma negociação, reserva o produto vinculado, marca o anúncio em negociação e recusa as ofertas concorrentes numa única transação. Cancelar a negociação libera o produto e reabre o anúncio.
+
+Envie uma contraproposta com `{"preco": "110.00", "texto": "..."}`. Para responder, use `{"acao": "aceitar"}`, `{"acao": "recusar", "justificativa": "..."}` ou `{"acao": "contrapropor", "preco": "115.00"}`; a justificativa de recusa aparece apenas para o destinatário.
+
+Palpites exigem um anúncio ativo, localização do vendedor dentro do raio e valor positivo; o comprador não pode palpitar no próprio anúncio. A consulta de estimativa revela apenas mínimo, média e máximo agregados, sem identificadores, contagem ou valores individuais, e responde `disponivel: false` até haver três vendedores distintos. Quando o anúncio define uma faixa de preço, `diverge_da_faixa_solicitada` indica se a média está fora dela; sem faixa, o campo é `null`. Palpites não criam ofertas nem iniciam uma negociação.
+
 O Nominatim público exige identificação no `User-Agent`, uso moderado e atribuição ao OpenStreetMap. A interface deve exibir “© OpenStreetMap contributors” quando apresentar resultados de geocodificação. Para maior volume, configure um provedor apropriado em vez do serviço público.
 
 Cada app segue MVC com camadas: `models.py` (Model) representa os dados; `views.py` (View) contém os serializers que validam a entrada e formatam a saída; `controllers.py` (Controller) trata HTTP e autorização; e `services.py` concentra as regras de negócio. Migrações existentes preservam os dados dos anúncios já cadastrados ao introduzir o catálogo de categorias.
 
-O schema de domínio tem no máximo 15 modelos/tabelas próprios, com dados relacionais normalizados; tabelas internas do Django e tabelas auxiliares do PostgreSQL/PostGIS não entram nessa contagem. Localização de referência é atributo 1:1 do usuário, eventos de negociação reúnem histórico de preço, contrapropostas e mensagens, e o alcance geográfico é materializado apenas para indexação GiST.
+O schema de domínio tem no máximo 16 modelos/tabelas próprios, com dados relacionais normalizados; tabelas internas do Django e tabelas auxiliares do PostgreSQL/PostGIS não entram nessa contagem. O modelo adicional `EventoNotificacao` registra chaves idempotentes e contexto de eventos agrupados. Localização de referência é atributo 1:1 do usuário, eventos de negociação reúnem histórico de preço, contrapropostas e mensagens, e o alcance geográfico é materializado apenas para indexação GiST.
+
+## Notificações
+
+Eventos do domínio geram notificações no aplicativo com chave idempotente. Eventos semelhantes podem ser agrupados, mantendo até 100 entradas recentes de contexto no agrupamento e o registro idempotente completo. Mensagens e contrapropostas não copiam texto privado para a notificação. Avaliações sigilosas só geram aviso quando publicadas.
+
+Rotas disponíveis no roteador da API:
+
+| Método | Rota | View |
+| --- | --- | --- |
+| `GET` | `/api/v1/notificacoes` | `NotificacoesView` |
+| `GET` | `/api/v1/notificacoes/nao-lidas` | `ContagemNaoLidasView` |
+| `PATCH` | `/api/v1/notificacoes/<uuid:notificacao_id>/lida` | `MarcarNotificacaoLidaView` |
+| `GET`, `PATCH` | `/api/v1/preferencias/notificacoes` | `PreferenciasNotificacaoView` |
+
+A listagem e a alteração de leitura são sempre limitadas ao usuário autenticado. `PATCH` de preferências recebe `{"preferencias":[{"tipo":"oferta_recebida","canal":"email","habilitada":false}]}`; os tipos catalogados incluem anúncios compatíveis, ofertas, mensagens/contrapropostas, conclusão, avaliações e segurança da conta. Avisos de segurança não podem ser desativados. Sem uma preferência armazenada, aplicativo e e-mail ficam habilitados.
+
+O envio de e-mail ocorre após o commit; falhas e respostas sem envio são registradas no log sem reverter a operação de domínio. Agende `python backend/manage.py notificar_contrapropostas_vencendo` de hora em hora para criar lembretes idempotentes até 24 horas antes do vencimento.
 
 A confirmação automática é aplicada ao consultar negociações e histórico; para que ocorra também sem acesso, agende `python manage.py concluir_negociacoes_expiradas` (por exemplo, a cada 15 minutos via cron).
 

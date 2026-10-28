@@ -24,7 +24,7 @@ def enviar(cliente_api, usuario, oferta, texto="Olá!"):
 def test_partes_trocam_mensagens_na_conversa_da_oferta(cliente_api, oferta):
     comprador = oferta.anuncio.comprador
     assert enviar(cliente_api, oferta.vendedor, oferta, "Posso entregar amanhã.").status_code == status.HTTP_201_CREATED
-    assert enviar(cliente_api, comprador, oferta, "Combinado!").status_code == status.HTTP_201_CREATED
+    assert enviar(cliente_api, comprador, oferta, "Combinado!").status_code == status.HTTP_201_CREATED  
 
     resposta = cliente_api.get(url_mensagens(oferta))
 

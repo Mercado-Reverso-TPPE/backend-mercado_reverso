@@ -1,7 +1,7 @@
 from django.apps import apps
 
 
-def test_schema_de_dominio_tem_no_maximo_15_modelos():
+def test_schema_de_dominio_tem_no_maximo_16_modelos():
     apps_de_dominio = {
         "contas",
         "anuncios",
@@ -19,4 +19,4 @@ def test_schema_de_dominio_tem_no_maximo_15_modelos():
         if model._meta.app_label in apps_de_dominio and not model._meta.proxy
     ]
 
-    assert len(modelos) == 15
+    assert len(modelos) == 16

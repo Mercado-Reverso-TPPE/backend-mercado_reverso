@@ -14,6 +14,7 @@ def criar_anuncio(*, comprador, dados):
     dados = dados.copy()
     dados["raio_m"] = dados.get("raio_m", settings.RAIO_PADRAO_KM * 1000)
     anuncio = Anuncio(comprador=comprador, **dados)
+    # Os vendedores compatíveis são avisados pelo signal de notificações, depois do commit.
     anuncio.save()
     return anuncio
 
@@ -21,9 +22,8 @@ def criar_anuncio(*, comprador, dados):
 @transaction.atomic
 def alterar_status_anuncio(*, anuncio, novo_status):
     transicoes_validas = {
-        Anuncio.Status.ATIVO: {Anuncio.Status.PAUSADO, Anuncio.Status.ENCERRADO, Anuncio.Status.EM_NEGOCIACAO},
+        Anuncio.Status.ATIVO: {Anuncio.Status.PAUSADO, Anuncio.Status.ENCERRADO},
         Anuncio.Status.PAUSADO: {Anuncio.Status.ATIVO, Anuncio.Status.ENCERRADO},
-        Anuncio.Status.EM_NEGOCIACAO: {Anuncio.Status.ATIVO},
     }
     if novo_status not in transicoes_validas.get(anuncio.status, set()):
         raise ValidationError("Transição de status inválida.")

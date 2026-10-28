@@ -6,6 +6,8 @@ from rest_framework import serializers
 from quero.anuncios.models import Categoria
 from quero.ofertas.models import BuscaSalva
 
+from .models import Recomendacao
+
 
 def validar_faixa_de_preco(attrs, instancia=None):
     minimo = attrs.get("preco_min", getattr(instancia, "preco_min", None))
@@ -75,3 +77,31 @@ class BuscaSalvaSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         return validar_faixa_de_preco(attrs, self.instance)
+
+
+class RecomendacaoSerializer(serializers.ModelSerializer):
+    produto_id = serializers.UUIDField(read_only=True)
+    nome = serializers.CharField(source="produto.nome", read_only=True)
+    categoria = serializers.CharField(source="produto.categoria.slug", read_only=True)
+    categoria_nome = serializers.CharField(source="produto.categoria.nome", read_only=True)
+    preco = serializers.DecimalField(source="produto.preco", max_digits=10, decimal_places=2, read_only=True)
+    estado_conservacao = serializers.CharField(source="produto.estado_conservacao", read_only=True)
+    distancia_m = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = Recomendacao
+        fields = (
+            "id",
+            "produto_id",
+            "nome",
+            "categoria",
+            "categoria_nome",
+            "preco",
+            "estado_conservacao",
+            "distancia_m",
+            "pontuacao",
+            "explicacao",
+            "estado",
+            "calculada_em",
+        )
+        read_only_fields = fields

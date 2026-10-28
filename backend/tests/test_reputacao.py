@@ -1,17 +1,3 @@
-"""
-Testes do fluxo de avaliações — QRO-18.
-
-Coberturas:
-- Avaliação prematura (negociação não concluída)
-- Duplicidade (segundo envio da mesma parte)
-- Partes incorretas (terceiro tenta avaliar)
-- Publicação simultânea quando ambas as partes avaliam
-- Publicação via prazo (publicar_avaliacoes_vencidas)
-- Privacidade (avaliação oculta antes do gatilho)
-- Resposta única e imutável pelo avaliado
-- Denúncia de avaliação + fila de moderação
-"""
-
 from datetime import timedelta
 
 import pytest
@@ -31,10 +17,6 @@ from quero.reputacao.services import (
     publicar_avaliacoes_vencidas,
     responder_avaliacao,
 )
-
-# ---------------------------------------------------------------------------
-# Fixtures auxiliares
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -110,11 +92,6 @@ def negociacao_em_andamento(negociacao_concluida):
     return negociacao_concluida
 
 
-# ---------------------------------------------------------------------------
-# Testes de criação — regras de acesso e estado
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 def test_avaliacao_requer_negociacao_concluida(comprador, negociacao_em_andamento):
     with pytest.raises(ValidationError, match="concluída"):
@@ -134,11 +111,6 @@ def test_duplicidade_bloqueada(comprador, negociacao_concluida):
         criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=3)
 
 
-# ---------------------------------------------------------------------------
-# Testes de privacidade antes do gatilho
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 def test_avaliacao_fica_oculta_enquanto_so_uma_parte_avaliou(comprador, negociacao_concluida):
     avaliacao = criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=5)
@@ -150,11 +122,6 @@ def test_reputacao_nao_computa_avaliacao_nao_publicada(comprador, vendedor, nego
     criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=1)
     # Só o comprador avaliou → avaliação do vendedor não publicada → reputação zero
     assert vendedor.reputacao == 0
-
-
-# ---------------------------------------------------------------------------
-# Testes de publicação simultânea
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
@@ -183,11 +150,6 @@ def test_reputacao_calculada_apos_publicacao(comprador, vendedor, negociacao_con
     assert comprador.reputacao == 5.0
 
 
-# ---------------------------------------------------------------------------
-# Testes de publicação por prazo
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 def test_publicar_avaliacoes_vencidas_libera_pendente_apos_prazo(comprador, negociacao_concluida):
     avaliacao = criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=3)
@@ -214,11 +176,6 @@ def test_publicar_avaliacoes_vencidas_nao_afeta_avaliacao_recente(comprador, neg
 
     avaliacao.refresh_from_db()
     assert avaliacao.publicada_em is None
-
-
-# ---------------------------------------------------------------------------
-# Testes de resposta
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
@@ -269,11 +226,6 @@ def test_resposta_exige_avaliacao_publicada(comprador, vendedor, negociacao_conc
         responder_avaliacao(avaliado=vendedor, avaliacao_id=avaliacao.pk, resposta="Tentativa prematura.")
 
 
-# ---------------------------------------------------------------------------
-# Testes de denúncia e moderação
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 def test_denuncia_cria_acao_moderacao_sem_alterar_avaliacao(comprador, vendedor, terceiro, negociacao_concluida):
     criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=2)
@@ -320,11 +272,6 @@ def test_denuncia_exige_avaliacao_publicada(comprador, vendedor, negociacao_conc
 
     with pytest.raises(ValidationError, match="publicadas"):
         denunciar_avaliacao(denunciante=vendedor, avaliacao_id=avaliacao.pk)
-
-
-# ---------------------------------------------------------------------------
-# Testes via HTTP (views)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db

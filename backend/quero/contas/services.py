@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import uuid
 from datetime import timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -99,6 +100,14 @@ def confirmar_redefinicao_senha(*, uid, token, nova_senha):
     password_validation.validate_password(nova_senha, user=usuario)
     usuario.set_password(nova_senha)
     usuario.save(update_fields=["password"])
+    from quero.notificacoes.services import emitir_alerta_seguranca
+
+    emitir_alerta_seguranca(
+        usuario=usuario,
+        titulo="Senha da conta alterada",
+        mensagem="A senha da sua conta foi alterada. Se você não fez isso, proteja sua conta.",
+        chave_evento=f"senha-alterada:{usuario.pk}:{uuid.uuid4()}",
+    )
 
 
 @transaction.atomic
@@ -214,4 +223,14 @@ def confirmar_alteracao_email(*, token):
 
     usuario.email = novo_email
     usuario.save(update_fields=["email"])
+    from quero.notificacoes.services import emitir_alerta_seguranca
+
+    emitir_alerta_seguranca(
+        usuario=usuario,
+        titulo="E-mail da conta alterado",
+        mensagem="O e-mail cadastrado na sua conta foi alterado.",
+        chave_evento=f"email-alterado:{usuario.pk}:{uuid.uuid4()}",
+        # Avisa o endereço anterior: se a troca não foi feita pelo dono, é ele quem precisa saber.
+        email_destino=email_atual,
+    )
     return usuario
