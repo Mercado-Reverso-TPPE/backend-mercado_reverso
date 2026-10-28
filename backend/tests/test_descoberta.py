@@ -20,19 +20,39 @@ _sequencia = itertools.count()
 
 def criar_usuario(deslocamento_longitude=None):
     numero = next(_sequencia)
-    usuario = Usuario.objects.create_user(email=f"pessoa{numero}@example.com", password="Senha-forte-123!", nome=f"Pessoa {numero}")
+    usuario = Usuario.objects.create_user(
+        email=f"pessoa{numero}@example.com", password="Senha-forte-123!", nome=f"Pessoa {numero}"
+    )
     if deslocamento_longitude is not None:
         usuario.ponto = Point(LONGITUDE + deslocamento_longitude, LATITUDE, srid=4326)
         usuario.save(update_fields=["ponto"])
     return usuario
 
 
-def criar_anuncio(comprador, categoria, titulo, *, descricao="Descrição", preco_min=None, preco_max=None, status_anuncio=Anuncio.Status.ATIVO, horas_atras=0, raio_m=20_000):
+def criar_anuncio(
+    comprador,
+    categoria,
+    titulo,
+    *,
+    descricao="Descrição",
+    preco_min=None,
+    preco_max=None,
+    status_anuncio=Anuncio.Status.ATIVO,
+    horas_atras=0,
+    raio_m=20_000,
+):
     anuncio = Anuncio.objects.create(
-        comprador=comprador, categoria=categoria, titulo=titulo, descricao=descricao,
-        preco_min=preco_min, preco_max=preco_max, raio_m=raio_m,
+        comprador=comprador,
+        categoria=categoria,
+        titulo=titulo,
+        descricao=descricao,
+        preco_min=preco_min,
+        preco_max=preco_max,
+        raio_m=raio_m,
     )
-    Anuncio.objects.filter(pk=anuncio.pk).update(status=status_anuncio, criado_em=timezone.now() - timedelta(hours=horas_atras))
+    Anuncio.objects.filter(pk=anuncio.pk).update(
+        status=status_anuncio, criado_em=timezone.now() - timedelta(hours=horas_atras)
+    )
     return anuncio
 
 
@@ -66,9 +86,32 @@ def cenario(categoria, moveis):
     perto, medio, longe = criar_usuario(0.01), criar_usuario(0.03), criar_usuario(0.05)
     fora_do_raio = criar_usuario(1.0)
     visiveis = {
-        "notebook": criar_anuncio(perto, categoria, "Notebook gamer", descricao="Placa de vídeo dedicada", preco_min=Decimal("2000"), preco_max=Decimal("4000"), horas_atras=5),
-        "celular": criar_anuncio(medio, categoria, "Celular usado", descricao="Tela intacta e bateria boa", preco_max=Decimal("800"), horas_atras=1),
-        "sofa": criar_anuncio(longe, moveis, "Sofá retrátil", descricao="Para sala pequena", preco_min=Decimal("500"), preco_max=Decimal("1500"), horas_atras=3),
+        "notebook": criar_anuncio(
+            perto,
+            categoria,
+            "Notebook gamer",
+            descricao="Placa de vídeo dedicada",
+            preco_min=Decimal("2000"),
+            preco_max=Decimal("4000"),
+            horas_atras=5,
+        ),
+        "celular": criar_anuncio(
+            medio,
+            categoria,
+            "Celular usado",
+            descricao="Tela intacta e bateria boa",
+            preco_max=Decimal("800"),
+            horas_atras=1,
+        ),
+        "sofa": criar_anuncio(
+            longe,
+            moveis,
+            "Sofá retrátil",
+            descricao="Para sala pequena",
+            preco_min=Decimal("500"),
+            preco_max=Decimal("1500"),
+            horas_atras=3,
+        ),
         "mesa": criar_anuncio(perto, moveis, "Mesa de jantar", descricao="Madeira, seis lugares", horas_atras=2),
     }
     invisiveis = [
@@ -155,7 +198,9 @@ def test_paginacao_nao_duplica_nem_perde_registros_com_empates(cliente_api, vend
     # Mesmo comprador, mesmo instante e mesmo orçamento: só o desempate por id diferencia.
     compradores = [criar_usuario(0.01), criar_usuario(0.02)]
     for indice in range(9):
-        criar_anuncio(compradores[indice % 2], categoria, f"Anúncio {indice}", preco_max=Decimal(100 * (indice % 3)) or None)
+        criar_anuncio(
+            compradores[indice % 2], categoria, f"Anúncio {indice}", preco_max=Decimal(100 * (indice % 3)) or None
+        )
     Anuncio.objects.update(criado_em=timezone.now())
     cliente_api.force_authenticate(user=vendedor_sp)
 
@@ -204,8 +249,16 @@ def test_resultado_vazio_e_usuario_sem_localizacao(cliente_api, cenario):
         ("categoria=inexistente", "categoria"),
         ("tamanho=51", "tamanho"),
         ("cursor=nao-e-um-cursor", "cursor"),
-        ("ordenacao=recentes&cursor=" + base64.urlsafe_b64encode(json.dumps({"o": "distancia", "v": [1.0, "x", "y"]}).encode()).decode(), "cursor"),
-        ("ordenacao=recentes&cursor=" + base64.urlsafe_b64encode(json.dumps({"o": "recentes", "v": ["ontem", "x"]}).encode()).decode(), "cursor"),
+        (
+            "ordenacao=recentes&cursor="
+            + base64.urlsafe_b64encode(json.dumps({"o": "distancia", "v": [1.0, "x", "y"]}).encode()).decode(),
+            "cursor",
+        ),
+        (
+            "ordenacao=recentes&cursor="
+            + base64.urlsafe_b64encode(json.dumps({"o": "recentes", "v": ["ontem", "x"]}).encode()).decode(),
+            "cursor",
+        ),
     ],
 )
 def test_parametros_invalidos(cliente_api, vendedor_sp, parametros, campo):
@@ -248,7 +301,13 @@ def test_crud_de_buscas_salvas_e_execucao(cliente_api, vendedor_sp, cenario):
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("metodo", "sufixo", "dados"),
-    [("get", "", None), ("patch", "", {"nome": "Invadida"}), ("put", "", {"nome": "Invadida"}), ("delete", "", None), ("get", "/anuncios", None)],
+    [
+        ("get", "", None),
+        ("patch", "", {"nome": "Invadida"}),
+        ("put", "", {"nome": "Invadida"}),
+        ("delete", "", None),
+        ("get", "/anuncios", None),
+    ],
 )
 def test_usuario_nao_acessa_buscas_salvas_de_terceiros(cliente_api, vendedor_sp, metodo, sufixo, dados):
     busca = BuscaSalva.objects.create(usuario=vendedor_sp, nome="Minha busca", termo="notebook")

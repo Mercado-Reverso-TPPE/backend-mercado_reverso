@@ -3,23 +3,30 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from rest_framework import permissions, status
-from rest_framework.routers import DefaultRouter
 from rest_framework.response import Response
+from rest_framework.routers import DefaultRouter
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from quero.anuncios.views import AnuncioViewSet, CategoriaListView
 from quero.catalogo.views import ProdutoViewSet
-from quero.descoberta.views import BuscaSalvaViewSet
-from quero.contas.views import CadastroView, ConfirmarAlteracaoEmailView, ConfirmarRedefinicaoSenhaView, PerfilView, SolicitarAlteracaoEmailView, SolicitarRedefinicaoSenhaView
 from quero.contas.serializers import LoginSerializer
+from quero.contas.views import (
+    CadastroView,
+    ConfirmarAlteracaoEmailView,
+    ConfirmarRedefinicaoSenhaView,
+    PerfilView,
+    SolicitarAlteracaoEmailView,
+    SolicitarRedefinicaoSenhaView,
+)
+from quero.descoberta.views import BuscaSalvaViewSet
 from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
 from quero.reputacao.views import (
     AvaliacoesDoUsuarioView,
     AvaliacoesNegociacaoView,
-    DetalheFilaModeracaoAvaliacaoView,
     DenunciaAvaliacaoView,
+    DetalheFilaModeracaoAvaliacaoView,
     FilaModeracaoAvaliacaoView,
     RespostaAvaliacaoView,
 )
@@ -54,19 +61,29 @@ urlpatterns = [
     path("api/v1/sessoes/renovar", TokenRefreshView.as_view(), name="renovar-sessao"),
     path("api/v1/perfil", PerfilView.as_view(), name="perfil"),
     path("api/v1/senha/redefinir", SolicitarRedefinicaoSenhaView.as_view(), name="solicitar-redefinicao-senha"),
-    path("api/v1/senha/redefinir/confirmar", ConfirmarRedefinicaoSenhaView.as_view(), name="confirmar-redefinicao-senha"),
+    path(
+        "api/v1/senha/redefinir/confirmar", ConfirmarRedefinicaoSenhaView.as_view(), name="confirmar-redefinicao-senha"
+    ),
     path("api/v1/perfil/email", SolicitarAlteracaoEmailView.as_view(), name="solicitar-alteracao-email"),
     path("api/v1/perfil/email/confirmar", ConfirmarAlteracaoEmailView.as_view(), name="confirmar-alteracao-email"),
     path("api/v1/categorias", CategoriaListView.as_view(), name="categorias"),
     path("api/v1/anuncios/<uuid:anuncio_id>/ofertas", OfertasDoAnuncioView.as_view(), name="ofertas-do-anuncio"),
     path("api/v1/ofertas/meus", MinhasOfertasView.as_view(), name="minhas-ofertas"),
     path("api/v1/ofertas/<uuid:oferta_id>", OfertaDetailView.as_view(), name="detalhe-oferta"),
-    path("api/v1/usuarios/<uuid:avaliado_id>/avaliacoes", AvaliacoesDoUsuarioView.as_view(), name="avaliacoes-do-usuario"),
-    path("api/v1/negociacoes/<uuid:negociacao_id>/avaliacoes", AvaliacoesNegociacaoView.as_view(), name="criar-avaliacao"),
+    path(
+        "api/v1/usuarios/<uuid:avaliado_id>/avaliacoes", AvaliacoesDoUsuarioView.as_view(), name="avaliacoes-do-usuario"
+    ),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/avaliacoes", AvaliacoesNegociacaoView.as_view(), name="criar-avaliacao"
+    ),
     path("api/v1/avaliacoes/<uuid:avaliacao_id>/resposta", RespostaAvaliacaoView.as_view(), name="resposta-avaliacao"),
     path("api/v1/avaliacoes/<uuid:avaliacao_id>/denuncias", DenunciaAvaliacaoView.as_view(), name="denuncia-avaliacao"),
     path("api/v1/moderacao/avaliacoes", FilaModeracaoAvaliacaoView.as_view(), name="fila-moderacao-avaliacoes"),
-    path("api/v1/moderacao/avaliacoes/<uuid:acao_id>", DetalheFilaModeracaoAvaliacaoView.as_view(), name="detalhe-moderacao-avaliacao"),
+    path(
+        "api/v1/moderacao/avaliacoes/<uuid:acao_id>",
+        DetalheFilaModeracaoAvaliacaoView.as_view(),
+        name="detalhe-moderacao-avaliacao",
+    ),
     path("api/v1/", include(router.urls)),
 ]
 

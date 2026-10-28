@@ -61,7 +61,13 @@ def outro_vendedor(db):
 @pytest.mark.django_db
 def test_vendedor_gerencia_o_proprio_catalogo(cliente_api, vendedor, categoria):
     cliente_api.force_authenticate(user=vendedor)
-    dados = {"nome": "Bicicleta", "descricao": "Aro 29", "categoria": categoria.slug, "estado_conservacao": "usado_bom", "preco": "900.00"}
+    dados = {
+        "nome": "Bicicleta",
+        "descricao": "Aro 29",
+        "categoria": categoria.slug,
+        "estado_conservacao": "usado_bom",
+        "preco": "900.00",
+    }
 
     criado = cliente_api.post("/api/v1/produtos", dados, format="json")
     assert criado.status_code == status.HTTP_201_CREATED
@@ -128,8 +134,14 @@ def test_upload_e_remocao_de_fotos(cliente_api, produto, media_temporaria, djang
     ("arquivos", "mensagem"),
     [
         (lambda: [imagem(f"{i}.png") for i in range(4)], "no máximo 3 fotos"),
-        (lambda: [imagem(), SimpleUploadedFile("grande.png", b"0" * (1024 * 1024 + 1), content_type="image/png")], "excede o limite"),
-        (lambda: [imagem(), SimpleUploadedFile("texto.png", b"nao sou imagem", content_type="image/png")], "não é uma imagem válida"),
+        (
+            lambda: [imagem(), SimpleUploadedFile("grande.png", b"0" * (1024 * 1024 + 1), content_type="image/png")],
+            "excede o limite",
+        ),
+        (
+            lambda: [imagem(), SimpleUploadedFile("texto.png", b"nao sou imagem", content_type="image/png")],
+            "não é uma imagem válida",
+        ),
         (lambda: [imagem(), imagem("animada.gif", "GIF")], "formatos"),
     ],
 )
@@ -286,8 +298,12 @@ def test_negociacao_cancelada_libera_o_produto_e_reserva_e_exclusiva(anuncio, ve
         comprador=anuncio.comprador, titulo="Outro", categoria=categoria, descricao="Outro", raio_m=20_000
     )
     outra_oferta = Oferta.objects.create(
-        anuncio=outro_anuncio, vendedor=vendedor_no_raio, produto=produto,
-        descricao="x", estado_conservacao=produto.estado_conservacao, preco="10.00",
+        anuncio=outro_anuncio,
+        vendedor=vendedor_no_raio,
+        produto=produto,
+        descricao="x",
+        estado_conservacao=produto.estado_conservacao,
+        preco="10.00",
     )
     with pytest.raises(ValidationError, match="não está mais disponível"):
         Negociacao.objects.create(oferta=outra_oferta, valor_final="10.00")
