@@ -3,14 +3,14 @@ from django.db import IntegrityError, transaction
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from quero.notificacoes.catalogo import TipoNotificacao
-from quero.notificacoes.models import EventoNotificacao, Notificacao, PreferenciaNotificacao
-from quero.notificacoes.services import emitir_notificacao
-from quero.notificacoes.views import (
+from quero.notificacoes.controllers import (
     ContagemNaoLidasView,
     MarcarNotificacaoLidaView,
     NotificacoesView,
     PreferenciasNotificacaoView,
 )
+from quero.notificacoes.models import EventoNotificacao, Notificacao, PreferenciaNotificacao
+from quero.notificacoes.services import emitir_notificacao
 from quero.ofertas.models import EventoNegociacao, Oferta
 
 

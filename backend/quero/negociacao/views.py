@@ -1,156 +1,151 @@
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status
-from rest_framework.exceptions import ValidationError
-from rest_framework.generics import ListAPIView, RetrieveAPIView
-from rest_framework.pagination import CursorPagination
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework import serializers
 
-from .serializers import (
-    ConversaSerializer,
-    FiltroHistoricoSerializer,
-    HistoricoDetalheSerializer,
-    MensagemSerializer,
-    NegociacaoSerializer,
-)
-from .services import (
-    concluir_negociacoes_expiradas,
-    confirmar_conclusao,
-    conversas_do_usuario,
-    enviar_mensagem,
-    historico_do_usuario,
-    marcar_mensagens_como_lidas,
-    mensagens_da_conversa,
-    negociacoes_do_usuario,
-    obter_conversa,
-    recusar_conclusao,
-    solicitar_conclusao,
-    total_mensagens_nao_lidas,
-)
+from quero.ofertas.models import EventoNegociacao
+
+from .models import Negociacao
+from .services import conversa_somente_leitura, prazo_confirmacao
 
 
-class ConversaPagination(CursorPagination):
-    page_size = 20
-    ordering = "-criada_em"
+def _contraparte(usuario, comprador, vendedor):
+    outro = vendedor if usuario.pk == comprador.pk else comprador
+    return {"id": outro.pk, "nome": outro.nome}
 
 
-class MensagemPagination(CursorPagination):
-    page_size = 50
-    ordering = "id"
+class MensagemSerializer(serializers.ModelSerializer):
+    autor_id = serializers.UUIDField(read_only=True)
+    autor_nome = serializers.CharField(source="autor.nome", read_only=True)
+    minha = serializers.SerializerMethodField()
+    texto = serializers.CharField(max_length=5000)
+
+    class Meta:
+        model = EventoNegociacao
+        fields = ("id", "autor_id", "autor_nome", "minha", "texto", "registrado_em", "lida_em")
+        read_only_fields = ("id", "autor_id", "autor_nome", "minha", "registrado_em", "lida_em")
+
+    def get_minha(self, obj):
+        return obj.autor_id == self.context["request"].user.pk
 
 
-class NegociacaoPagination(CursorPagination):
-    page_size = 20
-    ordering = "-criada_em"
+class ConversaSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    anuncio_id = serializers.UUIDField(read_only=True)
+    anuncio_titulo = serializers.CharField(source="anuncio.titulo", read_only=True)
+    status_oferta = serializers.CharField(source="status", read_only=True)
+    papel = serializers.SerializerMethodField()
+    contraparte = serializers.SerializerMethodField()
+    somente_leitura = serializers.SerializerMethodField()
+    mensagens_nao_lidas = serializers.IntegerField(read_only=True, default=0)
+    ultima_mensagem_em = serializers.DateTimeField(read_only=True, default=None)
+
+    def get_papel(self, obj):
+        return "comprador" if obj.anuncio.comprador_id == self.context["request"].user.pk else "vendedor"
+
+    def get_contraparte(self, obj):
+        return _contraparte(self.context["request"].user, obj.anuncio.comprador, obj.vendedor)
+
+    def get_somente_leitura(self, obj):
+        return conversa_somente_leitura(obj)
 
 
-class ConversasView(ListAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ConversaSerializer
-    pagination_class = ConversaPagination
-
-    def get_queryset(self):
-        return conversas_do_usuario(self.request.user)
+class PrecoNegociadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventoNegociacao
+        fields = ("preco", "tipo_evento", "rodada", "registrado_em")
+        read_only_fields = fields
 
 
-class MensagensNaoLidasView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class NegociacaoSerializer(serializers.ModelSerializer):
+    oferta_id = serializers.UUIDField(read_only=True)
+    anuncio = serializers.SerializerMethodField()
+    papel = serializers.SerializerMethodField()
+    contraparte = serializers.SerializerMethodField()
+    prazo_confirmacao_em = serializers.SerializerMethodField()
+    conclusao_automatica = serializers.SerializerMethodField()
+    avaliacao = serializers.SerializerMethodField()
 
-    def get(self, request):
-        return Response({"total": total_mensagens_nao_lidas(request.user)})
+    class Meta:
+        model = Negociacao
+        fields = (
+            "id",
+            "oferta_id",
+            "anuncio",
+            "papel",
+            "contraparte",
+            "status",
+            "valor_final",
+            "conclusao_solicitada_em",
+            "prazo_confirmacao_em",
+            "confirmada_em",
+            "concluida_em",
+            "cancelada_em",
+            "conclusao_automatica",
+            "avaliacao",
+            "criada_em",
+        )
+        read_only_fields = fields
 
+    def _usuario(self):
+        return self.context["request"].user
 
-class MensagensView(APIView):
-    """Mensagens são imutáveis: a conversa aceita apenas listagem e envio."""
+    def get_anuncio(self, obj):
+        anuncio = obj.oferta.anuncio
+        return {"id": anuncio.pk, "titulo": anuncio.titulo, "categoria": anuncio.categoria.slug}
 
-    permission_classes = [permissions.IsAuthenticated]
+    def get_papel(self, obj):
+        return "comprador" if obj.oferta.anuncio.comprador_id == self._usuario().pk else "vendedor"
 
-    def get(self, request, oferta_id):
-        oferta = obter_conversa(oferta_id=oferta_id, usuario=request.user)
-        mensagens = mensagens_da_conversa(oferta)
-        apos = request.query_params.get("apos")
-        if apos is not None:
-            if not apos.isdigit():
-                raise ValidationError({"apos": "Informe o id numérico da última mensagem recebida."})
-            mensagens = mensagens.filter(pk__gt=int(apos))
-        paginator = MensagemPagination()
-        pagina = paginator.paginate_queryset(mensagens, request, view=self)
-        dados = MensagemSerializer(pagina, many=True, context={"request": request}).data
-        return paginator.get_paginated_response(dados)
+    def get_contraparte(self, obj):
+        return _contraparte(self._usuario(), obj.oferta.anuncio.comprador, obj.oferta.vendedor)
 
-    def post(self, request, oferta_id):
-        oferta = obter_conversa(oferta_id=oferta_id, usuario=request.user)
-        serializer = MensagemSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        try:
-            mensagem = enviar_mensagem(oferta=oferta, autor=request.user, texto=serializer.validated_data["texto"])
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        return Response(MensagemSerializer(mensagem, context={"request": request}).data, status=status.HTTP_201_CREATED)
+    def get_prazo_confirmacao_em(self, obj):
+        if obj.status != Negociacao.Status.EM_ANDAMENTO or obj.conclusao_solicitada_em is None:
+            return None
+        return serializers.DateTimeField().to_representation(obj.conclusao_solicitada_em + prazo_confirmacao())
 
+    def get_conclusao_automatica(self, obj):
+        return obj.status == Negociacao.Status.CONCLUIDA and obj.confirmada_em is None
 
-class LeituraConversaView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, oferta_id):
-        oferta = obter_conversa(oferta_id=oferta_id, usuario=request.user)
-        return Response({"marcadas": marcar_mensagens_como_lidas(oferta=oferta, usuario=request.user)})
-
-
-class NegociacaoDetailView(RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = NegociacaoSerializer
-    lookup_url_kwarg = "negociacao_id"
-
-    def get_queryset(self):
-        concluir_negociacoes_expiradas(usuario=self.request.user)
-        return negociacoes_do_usuario(self.request.user)
-
-
-class AcaoConclusaoView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    acao = None
-
-    def post(self, request, negociacao_id):
-        negociacao = get_object_or_404(negociacoes_do_usuario(request.user), pk=negociacao_id)
-        try:
-            negociacao = type(self).acao(negociacao=negociacao, usuario=request.user)
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.messages) from exc
-        negociacao = negociacoes_do_usuario(request.user).get(pk=negociacao.pk)
-        return Response(NegociacaoSerializer(negociacao, context={"request": request}).data)
+    def get_avaliacao(self, obj):
+        enviada = any(avaliacao.autor_id == self._usuario().pk for avaliacao in obj.avaliacoes.all())
+        return {
+            "disponivel": obj.status == Negociacao.Status.CONCLUIDA and not enviada,
+            "enviada": enviada,
+        }
 
 
-class SolicitarConclusaoView(AcaoConclusaoView):
-    acao = solicitar_conclusao
+class HistoricoDetalheSerializer(NegociacaoSerializer):
+    preco_inicial = serializers.SerializerMethodField()
+    precos = serializers.SerializerMethodField()
+    mensagens = serializers.SerializerMethodField()
+
+    class Meta(NegociacaoSerializer.Meta):
+        fields = (*NegociacaoSerializer.Meta.fields, "preco_inicial", "precos", "mensagens")
+        read_only_fields = fields
+
+    def _eventos(self, obj):
+        return list(obj.oferta.eventos.select_related("autor"))
+
+    def get_preco_inicial(self, obj):
+        enviada = next((e for e in self._eventos(obj) if e.tipo_evento == EventoNegociacao.TipoEvento.ENVIADA), None)
+        preco = enviada.preco if enviada else obj.oferta.preco
+        return serializers.DecimalField(max_digits=10, decimal_places=2).to_representation(preco)
+
+    def get_precos(self, obj):
+        eventos = [
+            e
+            for e in self._eventos(obj)
+            if e.preco is not None and e.tipo_evento != EventoNegociacao.TipoEvento.MENSAGEM
+        ]
+        return PrecoNegociadoSerializer(eventos, many=True).data
+
+    def get_mensagens(self, obj):
+        mensagens = [e for e in self._eventos(obj) if e.tipo_evento == EventoNegociacao.TipoEvento.MENSAGEM]
+        return MensagemSerializer(mensagens, many=True, context=self.context).data
 
 
-class ConfirmarConclusaoView(AcaoConclusaoView):
-    acao = confirmar_conclusao
-
-
-class RecusarConclusaoView(AcaoConclusaoView):
-    acao = recusar_conclusao
-
-
-class HistoricoView(ListAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = NegociacaoSerializer
-    pagination_class = NegociacaoPagination
-
-    def get_queryset(self):
-        filtros = FiltroHistoricoSerializer(data=self.request.query_params)
-        filtros.is_valid(raise_exception=True)
-        concluir_negociacoes_expiradas(usuario=self.request.user)
-        return historico_do_usuario(self.request.user, **filtros.validated_data)
-
-
-class HistoricoDetailView(RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = HistoricoDetalheSerializer
-    lookup_url_kwarg = "negociacao_id"
-
-    def get_queryset(self):
-        concluir_negociacoes_expiradas(usuario=self.request.user)
-        return historico_do_usuario(self.request.user)
+class FiltroHistoricoSerializer(serializers.Serializer):
+    papel = serializers.ChoiceField(choices=("comprador", "vendedor"), required=False)
+    status = serializers.ChoiceField(
+        choices=(Negociacao.Status.CONCLUIDA, Negociacao.Status.CANCELADA),
+        required=False,
+    )

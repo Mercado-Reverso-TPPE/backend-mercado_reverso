@@ -9,10 +9,9 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from quero.anuncios.views import AnuncioViewSet, CategoriaListView
-from quero.catalogo.views import ProdutoViewSet
-from quero.contas.serializers import LoginSerializer
-from quero.contas.views import (
+from quero.anuncios.controllers import AnuncioViewSet, CategoriaListView
+from quero.catalogo.controllers import ProdutoViewSet
+from quero.contas.controllers import (
     CadastroView,
     ConfirmarAlteracaoEmailView,
     ConfirmarRedefinicaoSenhaView,
@@ -20,14 +19,15 @@ from quero.contas.views import (
     SolicitarAlteracaoEmailView,
     SolicitarRedefinicaoSenhaView,
 )
-from quero.descoberta.recomendacao_views import (
+from quero.contas.views import LoginSerializer
+from quero.descoberta.controllers import BuscaSalvaViewSet
+from quero.descoberta.recomendacao_controllers import (
     ConvidarVendedorRecomendacaoView,
     DescartarRecomendacaoView,
     RecomendacoesAnuncioView,
 )
-from quero.descoberta.views import BuscaSalvaViewSet
-from quero.moderacao.views import BloqueioDetailView, BloqueiosView, DenunciasConversaView
-from quero.negociacao.views import (
+from quero.moderacao.controllers import BloqueioDetailView, BloqueiosView, DenunciasConversaView
+from quero.negociacao.controllers import (
     ConfirmarConclusaoView,
     ConversasView,
     HistoricoDetailView,
@@ -39,14 +39,14 @@ from quero.negociacao.views import (
     RecusarConclusaoView,
     SolicitarConclusaoView,
 )
-from quero.negociacao.views_palpites import EstimativaPrecoAnuncioView, PalpiteAnuncioView
-from quero.notificacoes.views import (
+from quero.negociacao.controllers_palpites import EstimativaPrecoAnuncioView, PalpiteAnuncioView
+from quero.notificacoes.controllers import (
     ContagemNaoLidasView,
     MarcarNotificacaoLidaView,
     NotificacoesView,
     PreferenciasNotificacaoView,
 )
-from quero.ofertas.views import (
+from quero.ofertas.controllers import (
     CancelarNegociacaoView,
     ContrapropostaView,
     DecisaoOfertaView,
@@ -56,7 +56,7 @@ from quero.ofertas.views import (
     RecusarOfertaView,
     ResponderContrapropostaView,
 )
-from quero.reputacao.views import (
+from quero.reputacao.controllers import (
     AvaliacoesDoUsuarioView,
     AvaliacoesNegociacaoView,
     DenunciaAvaliacaoView,
@@ -188,3 +188,6 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+if "rest_framework.authentication.SessionAuthentication" in settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]:
+    urlpatterns += [path("api-auth/", include("rest_framework.urls"))]

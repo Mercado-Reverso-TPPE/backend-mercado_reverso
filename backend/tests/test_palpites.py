@@ -8,11 +8,11 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from quero.anuncios.models import Anuncio
 from quero.catalogo.models import Produto
 from quero.contas.models import Usuario
-from quero.negociacao.models import Negociacao, Palpite
-from quero.negociacao.views_palpites import (
+from quero.negociacao.controllers_palpites import (
     EstimativaPrecoAnuncioView,
     PalpiteAnuncioView,
 )
+from quero.negociacao.models import Negociacao, Palpite
 from quero.ofertas.models import EventoNegociacao, Oferta
 
 

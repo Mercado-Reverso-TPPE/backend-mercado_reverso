@@ -7,7 +7,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from quero.catalogo.models import Produto
 from quero.descoberta.models import Recomendacao
-from quero.descoberta.recomendacao_views import (
+from quero.descoberta.recomendacao_controllers import (
     ConvidarVendedorRecomendacaoView,
     DescartarRecomendacaoView,
     RecomendacoesAnuncioView,

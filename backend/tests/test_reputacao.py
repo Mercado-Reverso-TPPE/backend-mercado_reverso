@@ -18,6 +18,7 @@ from quero.reputacao.services import (
     responder_avaliacao,
 )
 
+
 @pytest.fixture
 def comprador(db):
     return Usuario.objects.create_user(
@@ -109,6 +110,7 @@ def test_duplicidade_bloqueada(comprador, negociacao_concluida):
     with pytest.raises(ValidationError, match="já avaliou"):
         criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=3)
 
+
 @pytest.mark.django_db
 def test_avaliacao_fica_oculta_enquanto_so_uma_parte_avaliou(comprador, negociacao_concluida):
     avaliacao = criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=5)
@@ -120,6 +122,7 @@ def test_reputacao_nao_computa_avaliacao_nao_publicada(comprador, vendedor, nego
     criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=1)
     # Só o comprador avaliou → avaliação do vendedor não publicada → reputação zero
     assert vendedor.reputacao == 0
+
 
 @pytest.mark.django_db
 def test_publicacao_simultanea_quando_ambas_as_partes_avaliam(comprador, vendedor, negociacao_concluida):
@@ -145,6 +148,7 @@ def test_reputacao_calculada_apos_publicacao(comprador, vendedor, negociacao_con
 
     assert vendedor.reputacao == 4.0
     assert comprador.reputacao == 5.0
+
 
 @pytest.mark.django_db
 def test_publicar_avaliacoes_vencidas_libera_pendente_apos_prazo(comprador, negociacao_concluida):
@@ -172,6 +176,7 @@ def test_publicar_avaliacoes_vencidas_nao_afeta_avaliacao_recente(comprador, neg
 
     avaliacao.refresh_from_db()
     assert avaliacao.publicada_em is None
+
 
 @pytest.mark.django_db
 def test_avaliado_pode_responder_uma_vez(comprador, vendedor, negociacao_concluida):
@@ -220,6 +225,7 @@ def test_resposta_exige_avaliacao_publicada(comprador, vendedor, negociacao_conc
     with pytest.raises(ValidationError, match="ainda não foi publicada"):
         responder_avaliacao(avaliado=vendedor, avaliacao_id=avaliacao.pk, resposta="Tentativa prematura.")
 
+
 @pytest.mark.django_db
 def test_denuncia_cria_acao_moderacao_sem_alterar_avaliacao(comprador, vendedor, terceiro, negociacao_concluida):
     criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=2)
@@ -266,6 +272,7 @@ def test_denuncia_exige_avaliacao_publicada(comprador, vendedor, negociacao_conc
 
     with pytest.raises(ValidationError, match="publicadas"):
         denunciar_avaliacao(denunciante=vendedor, avaliacao_id=avaliacao.pk)
+
 
 @pytest.mark.django_db
 def test_endpoint_criacao_avaliacao_retorna_201(cliente_api, comprador, negociacao_concluida):

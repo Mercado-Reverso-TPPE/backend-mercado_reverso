@@ -12,7 +12,7 @@ from .recomendacoes import (
     recomendacoes_visiveis,
     solicitar_atualizacao,
 )
-from .serializers import RecomendacaoSerializer
+from .views import RecomendacaoSerializer
 
 
 class RecomendacoesAnuncioView(APIView):

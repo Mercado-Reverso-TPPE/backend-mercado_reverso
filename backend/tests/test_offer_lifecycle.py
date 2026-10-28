@@ -14,7 +14,6 @@ from quero.catalogo.models import Produto
 from quero.contas.models import Usuario
 from quero.negociacao.models import Negociacao
 from quero.ofertas.models import EventoNegociacao, Oferta
-from quero.ofertas.serializers import EventoNegociacaoSerializer
 from quero.ofertas.services import (
     aceitar_oferta,
     cancelar_negociacao,
@@ -25,6 +24,7 @@ from quero.ofertas.services import (
     responder_contraproposta,
     retirar_oferta,
 )
+from quero.ofertas.views import EventoNegociacaoSerializer
 
 
 def _criar_oferta(anuncio, vendedor, preco="120.00", produto_id=None):
