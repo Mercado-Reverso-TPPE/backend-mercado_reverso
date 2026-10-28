@@ -4,7 +4,7 @@ Banco: **PostgreSQL 16 + PostGIS 3.4**. O DDL completo das tabelas da aplicaçã
 
 ## Diagrama entidade-relacionamento
 
-Tabelas próprias da aplicação. As tabelas internas do Django (`auth_*`, `django_*`, `token_blacklist_*`) e as tabelas de junção `contas_usuario_groups` e `contas_usuario_user_permissions` não aparecem no diagrama.
+Tabelas próprias da aplicação, as tabelas internas do Django (`auth_*`, `django_*`, `token_blacklist_*`) e as tabelas de junção `contas_usuario_groups` e `contas_usuario_user_permissions`.
 
 ![Diagrama entidade-relacionamento](assets/diagrama_er.png)
 
