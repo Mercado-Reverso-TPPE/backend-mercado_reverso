@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from decimal import Decimal
 from threading import Barrier
 
@@ -7,7 +8,6 @@ from django.core.exceptions import ValidationError
 from django.db import connections
 from django.test import override_settings
 from django.utils import timezone
-from datetime import timedelta
 
 from quero.anuncios.models import Anuncio
 from quero.catalogo.models import Produto
@@ -22,8 +22,8 @@ from quero.ofertas.services import (
     enviar_contraproposta,
     enviar_oferta,
     recusar_oferta,
-    retirar_oferta,
     responder_contraproposta,
+    retirar_oferta,
 )
 
 
@@ -160,9 +160,7 @@ def test_permissoes_e_recusa_de_contraproposta_preservam_oferta(anuncio, vendedo
     assert contraproposta.resultado == EventoNegociacao.Resultado.RECUSADA
     assert oferta.preco == Decimal("120.00")
     assert oferta.status == Oferta.Status.EM_NEGOCIACAO
-    justificativa_evento = oferta.eventos.get(
-        tipo_evento=EventoNegociacao.TipoEvento.CONTRAPROPOSTA_RECUSADA
-    )
+    justificativa_evento = oferta.eventos.get(tipo_evento=EventoNegociacao.TipoEvento.CONTRAPROPOSTA_RECUSADA)
     serialized_author = EventoNegociacaoSerializer(
         justificativa_evento,
         context={"request": type("Request", (), {"user": vendedor})()},
@@ -201,9 +199,7 @@ def test_recusa_de_oferta_mantem_motivo_privado_ao_destinatario(anuncio, vendedo
 
 
 @pytest.mark.django_db
-def test_aceite_recusa_concorrentes_e_cancelamento_reserva_produto(
-    anuncio, vendedor, categoria
-):
+def test_aceite_recusa_concorrentes_e_cancelamento_reserva_produto(anuncio, vendedor, categoria):
     produto = Produto.objects.create(
         vendedor=vendedor,
         categoria=categoria,
@@ -269,3 +265,52 @@ def test_aceites_concorrentes_nao_criam_duas_negociacoes(anuncio, vendedor):
     assert Negociacao.objects.filter(anuncio=anuncio).count() == 1
     anuncio.refresh_from_db()
     assert anuncio.status == Anuncio.Status.EM_NEGOCIACAO
+
+
+@pytest.mark.django_db
+@override_settings(CONTRAPROPOSTA_LIMITE_RODADAS=2, CONTRAPROPOSTA_PRAZO_HORAS=24)
+def test_aceite_de_contraproposta_pelo_vendedor_notifica_concorrentes(
+    anuncio, vendedor, django_capture_on_commit_callbacks
+):
+    from quero.notificacoes.models import Notificacao
+
+    comprador = anuncio.comprador
+    oferta = _criar_oferta(anuncio, vendedor)
+    concorrente = _outro_vendedor(anuncio)
+    oferta_concorrente = _criar_oferta(anuncio, concorrente, preco="130.00")
+    enviar_contraproposta(oferta_id=oferta.pk, autor=comprador, preco=Decimal("110.00"))
+
+    with django_capture_on_commit_callbacks(execute=True):
+        responder_contraproposta(oferta_id=oferta.pk, usuario=vendedor, acao="aceitar")
+
+    recusa = oferta_concorrente.eventos.get(tipo_evento=EventoNegociacao.TipoEvento.RECUSADA)
+    assert recusa.autor == comprador
+    assert Notificacao.objects.filter(usuario=concorrente, titulo="Oferta recusada").exists()
+    aceite = Notificacao.objects.get(usuario=comprador, oferta=oferta, titulo="Oferta aceita")
+    assert aceite.negociacao == Negociacao.objects.get(oferta=oferta)
+
+
+@pytest.mark.django_db
+def test_cancelamento_notifica_a_outra_parte(anuncio, vendedor, django_capture_on_commit_callbacks):
+    from quero.notificacoes.models import Notificacao
+
+    oferta = _criar_oferta(anuncio, vendedor)
+    negociacao = aceitar_oferta(oferta_id=oferta.pk, comprador=anuncio.comprador)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        cancelar_negociacao(negociacao_id=negociacao.pk, usuario=vendedor)
+
+    assert Notificacao.objects.filter(usuario=anuncio.comprador, titulo="Negociação cancelada").exists()
+
+
+@pytest.mark.django_db
+def test_falha_na_notificacao_nao_desfaz_a_oferta(anuncio, vendedor, monkeypatch, django_capture_on_commit_callbacks):
+    def falhar(*args):
+        raise RuntimeError("falha no canal")
+
+    monkeypatch.setattr("quero.notificacoes.signals.notificar_evento_negociacao", falhar)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        oferta = _criar_oferta(anuncio, vendedor)
+
+    assert Oferta.objects.filter(pk=oferta.pk, status=Oferta.Status.ENVIADA).exists()

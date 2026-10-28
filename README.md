@@ -84,7 +84,7 @@ O `GET` não calcula recomendações em linha: ele retorna resultados persistido
 docker compose exec backend python manage.py refresh_recommendations
 ```
 
-O worker busca e reivindica itens com bloqueio de linha, e falhas são registradas no anúncio e tentadas novamente com espera exponencial (até uma hora). Para processar a fila pronta e sair, use `--once`; para reenfileirar anúncios ativos desatualizados, `--enqueue-all`; para antecipar novas tentativas com falha, `--retry-failed`. Exemplo de recuperação manual:
+O worker busca e reivindica itens com bloqueio de linha, e falhas são registradas no anúncio e tentadas novamente com espera exponencial (até uma hora), no máximo `RECOMENDACOES_MAXIMO_TENTATIVAS` vezes (padrão 5). Esgotadas as tentativas, o anúncio sai da fila mantendo o último erro em `recomendacoes_ultimo_erro`; `--enqueue-all` ou uma nova consulta o reenfileiram. Para processar a fila pronta e sair, use `--once`; para reenfileirar anúncios ativos desatualizados, `--enqueue-all`; para antecipar novas tentativas com falha, `--retry-failed`. Exemplo de recuperação manual:
 
 ```sh
 docker compose exec backend python manage.py refresh_recommendations --retry-failed --once

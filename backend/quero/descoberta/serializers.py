@@ -4,8 +4,9 @@ from django.conf import settings
 from rest_framework import serializers
 
 from quero.anuncios.models import Categoria
-from .models import Recomendacao
 from quero.ofertas.models import BuscaSalva
+
+from .models import Recomendacao
 
 
 def validar_faixa_de_preco(attrs, instancia=None):

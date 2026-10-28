@@ -116,6 +116,7 @@ PESOS_RECOMENDACAO = {
     "preco": int(os.getenv("PESO_RECOMENDACAO_PRECO", "20")),
     "distancia": int(os.getenv("PESO_RECOMENDACAO_DISTANCIA", "15")),
 }
+RECOMENDACOES_MAXIMO_TENTATIVAS = int(os.getenv("RECOMENDACOES_MAXIMO_TENTATIVAS", "5"))
 LOGIN_MAX_TENTATIVAS = int(os.getenv("LOGIN_MAX_TENTATIVAS", "5"))
 LOGIN_BLOQUEIO_MINUTOS = int(os.getenv("LOGIN_BLOQUEIO_MINUTOS", "15"))
 GEOCODER_URL = os.getenv("GEOCODER_URL", "https://nominatim.openstreetmap.org")

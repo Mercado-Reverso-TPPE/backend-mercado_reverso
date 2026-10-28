@@ -24,8 +24,8 @@ from .services import (
     enviar_contraproposta,
     enviar_oferta,
     recusar_oferta,
-    retirar_oferta,
     responder_contraproposta,
+    retirar_oferta,
 )
 
 

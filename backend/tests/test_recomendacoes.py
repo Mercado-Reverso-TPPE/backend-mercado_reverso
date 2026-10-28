@@ -179,9 +179,7 @@ def test_descartada_permanece_excluida_apos_recarga(anuncio, produto):
 
     request = APIRequestFactory().post("/")
     force_authenticate(request, user=anuncio.comprador)
-    response = DescartarRecomendacaoView.as_view()(
-        request, anuncio_id=anuncio.pk, recomendacao_id=recomendacao.pk
-    )
+    response = DescartarRecomendacaoView.as_view()(request, anuncio_id=anuncio.pk, recomendacao_id=recomendacao.pk)
     assert response.status_code == status.HTTP_200_OK
 
     atualizar_recomendacoes(anuncio)
@@ -250,3 +248,67 @@ def test_convite_notifica_vendedor_sem_criar_oferta_ou_negociacao(anuncio, produ
 
     assert convidar().status_code == status.HTTP_200_OK
     assert Notificacao.objects.filter(usuario=produto.vendedor, anuncio=anuncio).count() == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("preco_min", "preco_max", "preco", "esperado"),
+    [
+        ("100", None, "10", 10),
+        ("100", None, "150", 100),
+        (None, "100", "50", 100),
+        (None, "100", "150", 50),
+        ("100", "200", "150", 100),
+        ("100", "200", "50", 50),
+    ],
+)
+def test_pontuacao_de_preco_com_faixa_aberta(anuncio, produto, preco_min, preco_max, preco, esperado):
+    anuncio.preco_min = Decimal(preco_min) if preco_min else None
+    anuncio.preco_max = Decimal(preco_max) if preco_max else None
+    produto.preco = Decimal(preco)
+
+    score, explicacao = compatibility_score(anuncio, produto, distancia_m=0)
+
+    assert explicacao["preco"]["pontuacao"] == esperado
+    assert Decimal("0") <= score <= Decimal("100")
+
+
+@pytest.mark.django_db
+def test_falha_permanente_para_de_ser_retentada(anuncio, produto, monkeypatch, settings):
+    from django.utils import timezone
+
+    from quero.anuncios.models import Anuncio
+
+    settings.RECOMENDACOES_MAXIMO_TENTATIVAS = 2
+
+    def falhar(anuncio):
+        raise RuntimeError("erro permanente")
+
+    monkeypatch.setattr("quero.descoberta.recomendacoes.atualizar_recomendacoes", falhar)
+    Anuncio.objects.filter(pk=anuncio.pk).update(
+        recomendacoes_solicitadas_em=timezone.now(), recomendacoes_tentar_em=timezone.now()
+    )
+
+    for _ in range(2):
+        assert processar_proxima_atualizacao() is True
+        Anuncio.objects.filter(pk=anuncio.pk, recomendacoes_tentar_em__isnull=False).update(
+            recomendacoes_tentar_em=timezone.now()
+        )
+
+    anuncio.refresh_from_db()
+    assert anuncio.recomendacoes_solicitadas_em is None
+    assert anuncio.recomendacoes_tentar_em is None
+    assert anuncio.recomendacoes_ultimo_erro == "erro permanente"
+    assert processar_proxima_atualizacao() is False
+
+
+@pytest.mark.django_db
+def test_comprador_sem_localizacao_nao_gera_erro_de_atualizacao(anuncio, produto):
+    comprador = anuncio.comprador
+    comprador.ponto = None
+    comprador.save(update_fields=["ponto"])
+    anuncio.refresh_from_db()
+
+    atualizar_recomendacoes(anuncio)
+
+    assert not Recomendacao.objects.filter(anuncio=anuncio).exists()

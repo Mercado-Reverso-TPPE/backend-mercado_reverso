@@ -33,6 +33,13 @@ def _habilitada(usuario, tipo, canal):
     return preferencia is not False
 
 
+def _validar_evento(tipo, chave_evento):
+    if tipo not in TipoNotificacao.values:
+        raise ValueError(f"Tipo de notificação não catalogado: {tipo}")
+    if len(chave_evento) > 180:
+        raise ValueError("A chave de idempotência excede 180 caracteres.")
+
+
 def emitir_notificacao(
     *,
     usuario,
@@ -45,12 +52,10 @@ def emitir_notificacao(
     anuncio=None,
     oferta=None,
     negociacao=None,
+    email_destino=None,
 ):
     """Persist an in-app event once, then deliver opted-in email after commit."""
-    if tipo not in TipoNotificacao.values:
-        raise ValueError(f"Tipo de notificação não catalogado: {tipo}")
-    if len(chave_evento) > 180:
-        raise ValueError("A chave de idempotência excede 180 caracteres.")
+    _validar_evento(tipo, chave_evento)
     if not agrupamento:
         agrupamento = f"{tipo}:{chave_evento}"[:100]
     contexto = contexto or {}
@@ -100,31 +105,18 @@ def emitir_notificacao(
 
         if app_habilitado:
             EventoNotificacao.objects.filter(pk=ledger.pk).update(notificacao=notificacao)
-            entradas = list(notificacao.contexto or [])
-            entradas.append(contexto)
-            notificacao.contexto = entradas[-100:]
-            notificacao.criada_em = timezone.now()
-            notificacao.titulo = titulo
-            notificacao.mensagem = mensagem
-            notificacao.anuncio = anuncio or notificacao.anuncio
-            notificacao.oferta = oferta or notificacao.oferta
-            notificacao.negociacao = negociacao or notificacao.negociacao
-            notificacao.lida_em = None
-            notificacao.save(
-                update_fields=(
-                    "contexto",
-                    "criada_em",
-                    "titulo",
-                    "mensagem",
-                    "anuncio",
-                    "oferta",
-                    "negociacao",
-                    "lida_em",
-                )
+            _acrescentar_ao_agrupamento(
+                notificacao,
+                titulo=titulo,
+                mensagem=mensagem,
+                contexto=contexto,
+                anuncio=anuncio,
+                oferta=oferta,
+                negociacao=negociacao,
             )
 
         if _habilitada(usuario, tipo, PreferenciaNotificacao.Canal.EMAIL):
-            email = usuario.email
+            email = email_destino or usuario.email
             transaction.on_commit(
                 lambda: _enviar_email(
                     email=email,
@@ -135,6 +127,31 @@ def emitir_notificacao(
                 )
             )
         return notificacao
+
+
+def _acrescentar_ao_agrupamento(notificacao, *, titulo, mensagem, contexto, anuncio, oferta, negociacao):
+    entradas = list(notificacao.contexto or [])
+    entradas.append(contexto)
+    notificacao.contexto = entradas[-100:]
+    notificacao.criada_em = timezone.now()
+    notificacao.titulo = titulo
+    notificacao.mensagem = mensagem
+    notificacao.anuncio = anuncio or notificacao.anuncio
+    notificacao.oferta = oferta or notificacao.oferta
+    notificacao.negociacao = negociacao or notificacao.negociacao
+    notificacao.lida_em = None
+    notificacao.save(
+        update_fields=(
+            "contexto",
+            "criada_em",
+            "titulo",
+            "mensagem",
+            "anuncio",
+            "oferta",
+            "negociacao",
+            "lida_em",
+        )
+    )
 
 
 def _enviar_email(*, email, tipo, titulo, mensagem, chave_evento):
@@ -160,9 +177,10 @@ def _enviar_email(*, email, tipo, titulo, mensagem, chave_evento):
         )
 
 
-def emitir_alerta_seguranca(*, usuario, titulo, mensagem, chave_evento, contexto=None):
+def emitir_alerta_seguranca(*, usuario, titulo, mensagem, chave_evento, contexto=None, email_destino=None):
     return emitir_notificacao(
         usuario=usuario,
+        email_destino=email_destino,
         tipo=TipoNotificacao.SEGURANCA_CONTA,
         titulo=titulo,
         mensagem=mensagem,
@@ -186,6 +204,7 @@ def notificar_vendedores_compativeis(anuncio_id):
     produtos = Produto.objects.filter(
         categoria_id=anuncio.categoria_id,
         status=Produto.Status.DISPONIVEL,
+        vendedor__is_active=True,
         vendedor__ponto__isnull=False,
     )
     if anuncio.alcance is not None:
@@ -195,19 +214,13 @@ def notificar_vendedores_compativeis(anuncio_id):
         produtos = produtos.filter(
             Q(vendedor__cidade__iexact=anuncio.comprador.cidade) & Q(vendedor__uf__iexact=anuncio.comprador.uf)
         )
-    recipients = (
-        produtos.exclude(vendedor_id=anuncio.comprador_id)
-        .values_list(
-            "vendedor_id",
-            flat=True,
-        )
-        .distinct()
-    )
-    count = 0
-    for recipient_id in recipients:
-        from quero.contas.models import Usuario
+    from quero.contas.models import Usuario
 
-        usuario = Usuario.objects.get(pk=recipient_id)
+    recipients = Usuario.objects.filter(
+        pk__in=produtos.exclude(vendedor_id=anuncio.comprador_id).values("vendedor_id"),
+    ).order_by("pk")
+    count = 0
+    for usuario in recipients:
         notification = emitir_notificacao(
             usuario=usuario,
             tipo=TipoNotificacao.ANUNCIO_COMPATIVEL,
@@ -294,6 +307,11 @@ def notificar_evento_negociacao(evento_id):
             TipoNotificacao.NEGOCIACAO_ATUALIZADA,
             "Oferta recusada",
             "Sua oferta foi recusada.",
+        ),
+        EventoNegociacao.TipoEvento.NEGOCIACAO_CANCELADA: (
+            TipoNotificacao.NEGOCIACAO_ATUALIZADA,
+            "Negociação cancelada",
+            "A outra parte cancelou a negociação.",
         ),
         EventoNegociacao.TipoEvento.MENSAGEM: (
             TipoNotificacao.MENSAGEM_RECEBIDA,

@@ -14,10 +14,8 @@ def criar_anuncio(*, comprador, dados):
     dados = dados.copy()
     dados["raio_m"] = dados.get("raio_m", settings.RAIO_PADRAO_KM * 1000)
     anuncio = Anuncio(comprador=comprador, **dados)
+    # Os vendedores compatíveis são avisados pelo signal de notificações, depois do commit.
     anuncio.save()
-    from quero.notificacoes.services import notificar_vendedores_compativeis
-
-    notificar_vendedores_compativeis(anuncio.pk)
     return anuncio
 
 

@@ -2,7 +2,6 @@ import pytest
 from django.db import IntegrityError, transaction
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from quero.ofertas.models import EventoNegociacao, Oferta
 from quero.notificacoes.catalogo import TipoNotificacao
 from quero.notificacoes.models import EventoNotificacao, Notificacao, PreferenciaNotificacao
 from quero.notificacoes.services import emitir_notificacao
@@ -12,6 +11,7 @@ from quero.notificacoes.views import (
     NotificacoesView,
     PreferenciasNotificacaoView,
 )
+from quero.ofertas.models import EventoNegociacao, Oferta
 
 
 @pytest.mark.django_db
@@ -90,7 +90,7 @@ def test_listagem_e_marcacao_de_leitura_isoladas_por_usuario(usuario):
 
 
 @pytest.mark.django_db
-def test_notificacao_de_mensagem_nao_expoe_texto_privado(anuncio, vendedor):
+def test_notificacao_de_mensagem_nao_expoe_texto_privado(anuncio, vendedor, django_capture_on_commit_callbacks):
     oferta = Oferta.objects.create(
         anuncio=anuncio,
         vendedor=vendedor,
@@ -98,13 +98,14 @@ def test_notificacao_de_mensagem_nao_expoe_texto_privado(anuncio, vendedor):
         estado_conservacao=Oferta.EstadoConservacao.USADO_BOM,
         preco="80.00",
     )
-    EventoNegociacao.objects.create(
-        oferta=oferta,
-        autor=vendedor,
-        status=oferta.status,
-        tipo_evento=EventoNegociacao.TipoEvento.MENSAGEM,
-        texto="texto privado que não deve ir para a notificação",
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        EventoNegociacao.objects.create(
+            oferta=oferta,
+            autor=vendedor,
+            status=oferta.status,
+            tipo_evento=EventoNegociacao.TipoEvento.MENSAGEM,
+            texto="texto privado que não deve ir para a notificação",
+        )
 
     notificacao = Notificacao.objects.get(usuario=anuncio.comprador)
     assert notificacao.tipo == TipoNotificacao.MENSAGEM_RECEBIDA
@@ -141,29 +142,24 @@ def test_preferencias_podem_desativar_email_mas_nao_alertas_de_seguranca(usuario
     factory = APIRequestFactory()
     request = factory.patch(
         "/api/v1/preferencias/notificacoes",
-        {
-            "preferencias": [
-                {"tipo": TipoNotificacao.OFERTA_RECEBIDA, "canal": "email", "habilitada": False}
-            ]
-        },
+        {"preferencias": [{"tipo": TipoNotificacao.OFERTA_RECEBIDA, "canal": "email", "habilitada": False}]},
         format="json",
     )
     force_authenticate(request, user=usuario)
     response = PreferenciasNotificacaoView.as_view()(request)
     assert response.status_code == 200
-    assert PreferenciaNotificacao.objects.get(
-        usuario=usuario,
-        tipo=TipoNotificacao.OFERTA_RECEBIDA,
-        canal="email",
-    ).habilitada is False
+    assert (
+        PreferenciaNotificacao.objects.get(
+            usuario=usuario,
+            tipo=TipoNotificacao.OFERTA_RECEBIDA,
+            canal="email",
+        ).habilitada
+        is False
+    )
 
     request = factory.patch(
         "/api/v1/preferencias/notificacoes",
-        {
-            "preferencias": [
-                {"tipo": TipoNotificacao.SEGURANCA_CONTA, "canal": "email", "habilitada": False}
-            ]
-        },
+        {"preferencias": [{"tipo": TipoNotificacao.SEGURANCA_CONTA, "canal": "email", "habilitada": False}]},
         format="json",
     )
     force_authenticate(request, user=usuario)
@@ -243,3 +239,49 @@ def test_falha_de_email_e_registrada_sem_desfazer_notificacao(usuario, monkeypat
     assert repetir is None
     assert Notificacao.objects.filter(usuario=usuario).count() == 1
     assert "Falha ao enviar e-mail de notificação" in caplog.text
+
+
+@pytest.mark.django_db
+def test_alerta_de_troca_de_email_vai_para_o_endereco_anterior(usuario, mailoutbox, django_capture_on_commit_callbacks):
+    from django.core import signing
+
+    from quero.contas.services import confirmar_alteracao_email
+
+    email_anterior = usuario.email
+    token = signing.dumps(
+        {"usuario_id": str(usuario.pk), "email_atual": email_anterior, "novo_email": "novo@example.com"},
+        salt="quero.alteracao-email",
+    )
+
+    with django_capture_on_commit_callbacks(execute=True):
+        confirmar_alteracao_email(token=token)
+
+    assert [mensagem.to for mensagem in mailoutbox] == [[email_anterior]]
+
+
+@pytest.mark.django_db
+def test_vendedor_inativo_nao_recebe_anuncio_compativel(
+    categoria, usuario_com_localizacao, vendedor, django_capture_on_commit_callbacks
+):
+    from quero.anuncios.services import criar_anuncio
+    from quero.catalogo.models import Produto
+
+    vendedor.ponto = usuario_com_localizacao.ponto
+    vendedor.is_active = False
+    vendedor.save(update_fields=["ponto", "is_active"])
+    Produto.objects.create(
+        vendedor=vendedor,
+        categoria=categoria,
+        nome="Notebook",
+        descricao="Notebook",
+        estado_conservacao=Produto.EstadoConservacao.SEMINOVO,
+        preco="100.00",
+    )
+
+    with django_capture_on_commit_callbacks(execute=True):
+        criar_anuncio(
+            comprador=usuario_com_localizacao,
+            dados={"titulo": "Procuro notebook", "categoria": categoria, "descricao": "Para estudo"},
+        )
+
+    assert not Notificacao.objects.filter(usuario=vendedor).exists()

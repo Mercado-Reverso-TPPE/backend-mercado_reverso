@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -19,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 def _apos_commit(callback, *args):
-    from django.db import transaction
-
     def executar():
         try:
             callback(*args)
@@ -47,7 +46,8 @@ def anuncio_criado(sender, instance, created, **kwargs):
 )
 def evento_negociacao_criado(sender, instance, created, **kwargs):
     if created:
-        notificar_evento_negociacao(instance.pk)
+        # Depois do commit a negociação aberta pelo aceite já existe e uma falha aqui não desfaz o evento.
+        _apos_commit(notificar_evento_negociacao, instance.pk)
 
 
 @receiver(
@@ -57,7 +57,7 @@ def evento_negociacao_criado(sender, instance, created, **kwargs):
 )
 def negociacao_atualizada(sender, instance, **kwargs):
     if instance.status == Negociacao.Status.CONCLUIDA:
-        notificar_negociacao_concluida(instance.pk)
+        _apos_commit(notificar_negociacao_concluida, instance.pk)
 
 
 @receiver(
@@ -67,4 +67,4 @@ def negociacao_atualizada(sender, instance, **kwargs):
 )
 def avaliacao_publicada(sender, instance, **kwargs):
     if instance.publicada_em is not None:
-        notificar_avaliacao_publicada(instance.pk)
+        _apos_commit(notificar_avaliacao_publicada, instance.pk)

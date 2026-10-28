@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
@@ -73,19 +73,18 @@ def _pontuacao_preco(produto, anuncio):
     maximo = anuncio.preco_max
     if minimo is None and maximo is None:
         return Decimal("50"), "O anúncio não informa faixa de preço."
-    if minimo is not None and (maximo is None or preco >= minimo) and (maximo is None or preco <= maximo):
+    abaixo = minimo is not None and preco < minimo
+    acima = maximo is not None and preco > maximo
+    if not abaixo and not acima:
         return Decimal("100"), "O preço está dentro da faixa informada."
-    if minimo is not None and preco < minimo:
-        diferenca = minimo - preco
-        nota = Decimal("100") * max(Decimal("0"), Decimal("1") - diferenca / max(minimo, Decimal("1")))
-    else:
-        diferenca = preco - maximo
-        nota = Decimal("100") * max(Decimal("0"), Decimal("1") - diferenca / max(maximo, Decimal("1")))
+    limite = minimo if abaixo else maximo
+    diferenca = abs(preco - limite)
+    nota = Decimal("100") * max(Decimal("0"), Decimal("1") - diferenca / max(limite, Decimal("1")))
     return nota, "O preço está fora da faixa; a pontuação diminui conforme a diferença."
 
 
 def compatibility_score(anuncio, produto, distancia_m, pesos=None):
-    """Calcula uma pontuação determinística de 0–100 e seus fatores explicáveis."""
+    """Calcula uma pontuação determinística de 0 a 100 e seus fatores explicáveis."""
     termos_anuncio = _termos(f"{anuncio.titulo} {anuncio.descricao}")
     termos_produto = _termos(f"{produto.nome} {produto.descricao}")
     termos_encontrados = sorted(termos_anuncio & termos_produto)
@@ -215,7 +214,8 @@ def solicitar_atualizacao(anuncio):
 
 
 def atualizar_recomendacoes(anuncio):
-    if anuncio.status != Anuncio.Status.ATIVO or anuncio.alcance is None:
+    # Sem localização do comprador não há distância a calcular; não é um erro a ser repetido.
+    if anuncio.status != Anuncio.Status.ATIVO or anuncio.alcance is None or anuncio.comprador.ponto is None:
         return
     for produto in _produtos_para_anuncio(anuncio).iterator():
         pontuacao, explicacao = compatibility_score(anuncio, produto, produto.distancia_m)
@@ -265,10 +265,24 @@ def processar_proxima_atualizacao():
         logger.exception("Falha ao atualizar recomendações do anúncio %s", anuncio_id)
         with transaction.atomic():
             anuncio = Anuncio.objects.select_for_update().get(pk=anuncio_id)
+            esgotou = anuncio.recomendacoes_tentativas >= settings.RECOMENDACOES_MAXIMO_TENTATIVAS
+            if esgotou:
+                # Desiste para não repetir para sempre um erro permanente; um novo pedido reabre a fila.
+                logger.error(
+                    "Atualização de recomendações do anúncio %s abandonada após %s tentativas",
+                    anuncio_id,
+                    anuncio.recomendacoes_tentativas,
+                )
+                proxima_tentativa = None
+            else:
+                proxima_tentativa = timezone.now() + timedelta(
+                    minutes=min(2 ** min(anuncio.recomendacoes_tentativas, 6), 60)
+                )
             Anuncio.objects.filter(pk=anuncio_id).update(
                 recomendacoes_processando_em=None,
-                recomendacoes_tentar_em=timezone.now()
-                + timedelta(minutes=min(2 ** min(anuncio.recomendacoes_tentativas, 6), 60)),
+                recomendacoes_solicitadas_em=None if esgotou else anuncio.recomendacoes_solicitadas_em,
+                recomendacoes_tentar_em=proxima_tentativa,
+                recomendacoes_tentativas=0 if esgotou else anuncio.recomendacoes_tentativas,
                 recomendacoes_ultimo_erro=str(exc)[:2000],
             )
         return True

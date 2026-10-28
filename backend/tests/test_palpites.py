@@ -46,12 +46,8 @@ def test_vendedor_substitui_palpite_sem_criar_oferta_ou_negociacao(anuncio):
         preco=Decimal("200.00"),
     )
 
-    primeira = _request(
-        PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "125.00"}
-    )
-    substituicao = _request(
-        PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "150.00"}
-    )
+    primeira = _request(PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "125.00"})
+    substituicao = _request(PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "150.00"})
 
     assert primeira.status_code == status.HTTP_201_CREATED
     assert substituicao.status_code == status.HTTP_200_OK
@@ -70,15 +66,11 @@ def test_vendedor_substitui_palpite_sem_criar_oferta_ou_negociacao(anuncio):
 def test_estimativa_indisponivel_ate_tres_vendedores_distintos(anuncio):
     primeiro = _vendedor_no_raio(anuncio, "primeiro@example.com")
     segundo = _vendedor_no_raio(anuncio, "segundo@example.com")
-    primeiro_reenvio = _request(
-        PalpiteAnuncioView, "post", primeiro, anuncio, {"valor": "100.00"}
-    )
+    primeiro_reenvio = _request(PalpiteAnuncioView, "post", primeiro, anuncio, {"valor": "100.00"})
     _request(PalpiteAnuncioView, "post", primeiro, anuncio, {"valor": "120.00"})
     _request(PalpiteAnuncioView, "post", segundo, anuncio, {"valor": "130.00"})
 
-    resposta = _request(
-        EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio
-    )
+    resposta = _request(EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio)
 
     assert primeiro_reenvio.status_code == status.HTTP_201_CREATED
     assert resposta.status_code == status.HTTP_200_OK
@@ -102,9 +94,7 @@ def test_estimativa_agrega_sem_expor_identidades_ou_valores_individuais(anuncio)
             {"valor": valor},
         )
 
-    resposta = _request(
-        EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio
-    )
+    resposta = _request(EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio)
 
     assert resposta.status_code == status.HTTP_200_OK
     assert resposta.data == {
@@ -121,10 +111,7 @@ def test_estimativa_agrega_sem_expor_identidades_ou_valores_individuais(anuncio)
 
 @pytest.mark.django_db
 def test_estimativa_indica_media_fora_da_faixa_ou_nulo_sem_faixa(anuncio):
-    vendedores = [
-        _vendedor_no_raio(anuncio, f"faixa-{index}@example.com")
-        for index in range(3)
-    ]
+    vendedores = [_vendedor_no_raio(anuncio, f"faixa-{index}@example.com") for index in range(3)]
     for vendedor in vendedores:
         _request(
             PalpiteAnuncioView,
@@ -137,15 +124,11 @@ def test_estimativa_indica_media_fora_da_faixa_ou_nulo_sem_faixa(anuncio):
     anuncio.preco_max = Decimal("200.00")
     anuncio.save(update_fields=["preco_min", "preco_max"])
 
-    fora_da_faixa = _request(
-        EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio
-    )
+    fora_da_faixa = _request(EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio)
     anuncio.preco_min = None
     anuncio.preco_max = None
     anuncio.save(update_fields=["preco_min", "preco_max"])
-    sem_faixa = _request(
-        EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio
-    )
+    sem_faixa = _request(EstimativaPrecoAnuncioView, "get", anuncio.comprador, anuncio)
 
     assert fora_da_faixa.data["diverge_da_faixa_solicitada"] is True
     assert sem_faixa.data["diverge_da_faixa_solicitada"] is None
@@ -163,18 +146,14 @@ def test_controle_de_papel_e_validacoes_do_palpite(anuncio, vendedor):
         anuncio,
         {"valor": "100.00"},
     )
-    estimativa_por_vendedor = _request(
-        EstimativaPrecoAnuncioView, "get", vendedor, anuncio
-    )
+    estimativa_por_vendedor = _request(EstimativaPrecoAnuncioView, "get", vendedor, anuncio)
     estimativa_por_terceiro = _request(
         EstimativaPrecoAnuncioView,
         "get",
         _vendedor_no_raio(anuncio, "terceiro@example.com"),
         anuncio,
     )
-    valor_invalido = _request(
-        PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "0"}
-    )
+    valor_invalido = _request(PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "0"})
 
     assert palpite_proprio.status_code == status.HTTP_400_BAD_REQUEST
     assert estimativa_por_vendedor.status_code == status.HTTP_403_FORBIDDEN
@@ -193,9 +172,7 @@ def test_palpite_exige_anuncio_ativo(anuncio, vendedor, estado):
     anuncio.status = estado
     anuncio.save(update_fields=["status"])
 
-    resposta = _request(
-        PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "100.00"}
-    )
+    resposta = _request(PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "100.00"})
 
     assert resposta.status_code == status.HTTP_400_BAD_REQUEST
     assert not Palpite.objects.filter(anuncio=anuncio).exists()
@@ -203,14 +180,10 @@ def test_palpite_exige_anuncio_ativo(anuncio, vendedor, estado):
 
 @pytest.mark.django_db
 def test_palpite_exige_localizacao_no_raio(anuncio, vendedor):
-    resposta_sem_localizacao = _request(
-        PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "100.00"}
-    )
+    resposta_sem_localizacao = _request(PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "100.00"})
     vendedor.ponto = Point(-48.0, -23.5505, srid=4326)
     vendedor.save(update_fields=["ponto"])
-    resposta_fora_do_raio = _request(
-        PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "100.00"}
-    )
+    resposta_fora_do_raio = _request(PalpiteAnuncioView, "post", vendedor, anuncio, {"valor": "100.00"})
 
     assert resposta_sem_localizacao.status_code == status.HTTP_400_BAD_REQUEST
     assert resposta_fora_do_raio.status_code == status.HTTP_400_BAD_REQUEST

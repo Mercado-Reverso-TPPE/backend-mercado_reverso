@@ -230,5 +230,7 @@ def confirmar_alteracao_email(*, token):
         titulo="E-mail da conta alterado",
         mensagem="O e-mail cadastrado na sua conta foi alterado.",
         chave_evento=f"email-alterado:{usuario.pk}:{uuid.uuid4()}",
+        # Avisa o endereço anterior: se a troca não foi feita pelo dono, é ele quem precisa saber.
+        email_destino=email_atual,
     )
     return usuario

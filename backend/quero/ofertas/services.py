@@ -186,9 +186,7 @@ def _expire_counteroffer(oferta, contraproposta, *, now=None):
 
 
 def _expire_if_due(oferta, contraproposta):
-    if _expire_counteroffer(oferta, contraproposta):
-        return True
-    return False
+    return bool(_expire_counteroffer(oferta, contraproposta))
 
 
 def _counteroffer_count(oferta):
@@ -273,7 +271,10 @@ def enviar_contraproposta(*, oferta_id, autor, preco, texto=""):
     )
 
 
-def _mark_competitors_rejected(anuncio, oferta, actor):
+def _mark_competitors_rejected(anuncio, oferta):
+    # Quem recusa as concorrentes é sempre o comprador, mesmo quando o aceite parte do vendedor
+    # (resposta a uma contraproposta); assim a notificação chega ao vendedor recusado.
+    comprador = anuncio.comprador
     competitors = (
         Oferta.objects.select_for_update()
         .filter(
@@ -296,13 +297,13 @@ def _mark_competitors_rejected(anuncio, oferta, actor):
                 pending,
                 event_type=EventoNegociacao.TipoEvento.CONTRAPROPOSTA_SUBSTITUIDA,
                 result=EventoNegociacao.Resultado.SUBSTITUIDA,
-                actor=actor,
+                actor=comprador,
             )
         competitor.status = Oferta.Status.RECUSADA
         competitor.save(update_fields=["status", "atualizada_em"])
         EventoNegociacao.objects.create(
             oferta=competitor,
-            autor=actor,
+            autor=comprador,
             preco=competitor.preco,
             status=competitor.status,
             tipo_evento=EventoNegociacao.TipoEvento.RECUSADA,
@@ -333,7 +334,7 @@ def _accept_locked(anuncio, oferta, *, actor, final_price, accepted_counter=None
     oferta.preco = final_price
     oferta.status = Oferta.Status.ACEITA
     oferta.save(update_fields=["preco", "status", "atualizada_em"])
-    _mark_competitors_rejected(anuncio, oferta, actor)
+    _mark_competitors_rejected(anuncio, oferta)
     anuncio.status = Anuncio.Status.EM_NEGOCIACAO
     anuncio.save(update_fields=["status", "atualizado_em"])
     EventoNegociacao.objects.create(
@@ -426,35 +427,38 @@ def responder_contraproposta(*, oferta_id, usuario, acao, justificativa="", prec
         )
         return oferta
     if acao == "contrapropor":
-        if preco is None or preco <= 0:
-            raise ValidationError("O preço da contraproposta deve ser positivo.")
-        _record_counteroffer_outcome(
-            oferta,
-            pending,
-            event_type=EventoNegociacao.TipoEvento.CONTRAPROPOSTA_SUBSTITUIDA,
-            result=EventoNegociacao.Resultado.SUBSTITUIDA,
-            actor=usuario,
-        )
-        limite = settings.CONTRAPROPOSTA_LIMITE_RODADAS
-        prazo_horas = settings.CONTRAPROPOSTA_PRAZO_HORAS
-        if _counteroffer_count(oferta) >= limite:
-            raise ValidationError("O limite de rodadas de contraproposta foi atingido.")
-        if limite < 1 or prazo_horas < 1:
-            raise ValidationError("A configuração de contrapropostas deve definir limite e prazo positivos.")
-        rodada = _counteroffer_count(oferta) + 1
-        EventoNegociacao.objects.create(
-            oferta=oferta,
-            autor=usuario,
-            preco=preco,
-            status=oferta.status,
-            tipo_evento=EventoNegociacao.TipoEvento.CONTRAPROPOSTA,
-            texto=texto,
-            rodada=rodada,
-            expira_em=timezone.now() + timedelta(hours=prazo_horas),
-            resultado=EventoNegociacao.Resultado.PENDENTE,
-        )
+        _substituir_contraproposta(oferta, pending, usuario=usuario, preco=preco, texto=texto)
         return oferta
     raise ValidationError("Ação de resposta inválida.")
+
+
+def _substituir_contraproposta(oferta, pending, *, usuario, preco, texto):
+    if preco is None or preco <= 0:
+        raise ValidationError("O preço da contraproposta deve ser positivo.")
+    _record_counteroffer_outcome(
+        oferta,
+        pending,
+        event_type=EventoNegociacao.TipoEvento.CONTRAPROPOSTA_SUBSTITUIDA,
+        result=EventoNegociacao.Resultado.SUBSTITUIDA,
+        actor=usuario,
+    )
+    limite = settings.CONTRAPROPOSTA_LIMITE_RODADAS
+    prazo_horas = settings.CONTRAPROPOSTA_PRAZO_HORAS
+    if _counteroffer_count(oferta) >= limite:
+        raise ValidationError("O limite de rodadas de contraproposta foi atingido.")
+    if limite < 1 or prazo_horas < 1:
+        raise ValidationError("A configuração de contrapropostas deve definir limite e prazo positivos.")
+    EventoNegociacao.objects.create(
+        oferta=oferta,
+        autor=usuario,
+        preco=preco,
+        status=oferta.status,
+        tipo_evento=EventoNegociacao.TipoEvento.CONTRAPROPOSTA,
+        texto=texto,
+        rodada=_counteroffer_count(oferta) + 1,
+        expira_em=timezone.now() + timedelta(hours=prazo_horas),
+        resultado=EventoNegociacao.Resultado.PENDENTE,
+    )
 
 
 @transaction.atomic
@@ -508,7 +512,7 @@ def expirar_contrapropostas_vencidas(*, agora=None):
     expiradas = 0
     for oferta_id in ids:
         with transaction.atomic():
-            anuncio, oferta = _lock_offer(oferta_id)
+            _anuncio, oferta = _lock_offer(oferta_id)
             if oferta.status not in OFERTAS_ATIVAS:
                 continue
             pending = _open_counteroffer(oferta)
