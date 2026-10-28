@@ -211,16 +211,20 @@ def _may_counter(anuncio, oferta, actor):
     )
     if latest is None:
         return actor.pk == anuncio.comprador_id
-    response = EventoNegociacao.objects.filter(
-        oferta=oferta,
-        rodada=latest.rodada,
-        tipo_evento__in=(
-            EventoNegociacao.TipoEvento.CONTRAPROPOSTA_ACEITA,
-            EventoNegociacao.TipoEvento.CONTRAPROPOSTA_RECUSADA,
-            EventoNegociacao.TipoEvento.CONTRAPROPOSTA_EXPIRADA,
-            EventoNegociacao.TipoEvento.CONTRAPROPOSTA_SUBSTITUIDA,
-        ),
-    ).order_by("-registrado_em", "-pk").first()
+    response = (
+        EventoNegociacao.objects.filter(
+            oferta=oferta,
+            rodada=latest.rodada,
+            tipo_evento__in=(
+                EventoNegociacao.TipoEvento.CONTRAPROPOSTA_ACEITA,
+                EventoNegociacao.TipoEvento.CONTRAPROPOSTA_RECUSADA,
+                EventoNegociacao.TipoEvento.CONTRAPROPOSTA_EXPIRADA,
+                EventoNegociacao.TipoEvento.CONTRAPROPOSTA_SUBSTITUIDA,
+            ),
+        )
+        .order_by("-registrado_em", "-pk")
+        .first()
+    )
     if response is not None and response.tipo_evento != EventoNegociacao.TipoEvento.CONTRAPROPOSTA_EXPIRADA:
         return response.autor_id == actor.pk
     return latest.autor_id != actor.pk
@@ -458,11 +462,7 @@ def cancelar_negociacao(*, negociacao_id, usuario):
     try:
         anuncio_id = Negociacao.objects.values_list("anuncio_id", flat=True).get(pk=negociacao_id)
         anuncio = Anuncio.objects.select_for_update().get(pk=anuncio_id)
-        negociacao = (
-            Negociacao.objects.select_for_update()
-            .select_related("oferta")
-            .get(pk=negociacao_id)
-        )
+        negociacao = Negociacao.objects.select_for_update().select_related("oferta").get(pk=negociacao_id)
     except (Negociacao.DoesNotExist, Anuncio.DoesNotExist) as exc:
         raise ValidationError("A negociação não existe.") from exc
     oferta = Oferta.objects.select_for_update().get(pk=negociacao.oferta_id)

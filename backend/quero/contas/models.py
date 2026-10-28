@@ -1,7 +1,9 @@
 import uuid
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.contrib.gis.db import models as gis_models
 from django.db import models
+
 
 class UsuarioManager(BaseUserManager):
     use_in_migrations = True
@@ -22,6 +24,7 @@ class UsuarioManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
         return self.create_user(email, password, **extra_fields)
+
 
 class Usuario(AbstractUser):
     username = None

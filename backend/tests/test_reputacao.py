@@ -12,13 +12,15 @@ Coberturas:
 - Denúncia de avaliação + fila de moderação
 """
 
+from datetime import timedelta
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from datetime import timedelta
 from rest_framework import status
 
 from quero.contas.models import Usuario
+from quero.moderacao.models import AcaoModeracao
 from quero.negociacao.models import Negociacao
 from quero.ofertas.models import Oferta
 from quero.reputacao.models import Avaliacao
@@ -29,8 +31,6 @@ from quero.reputacao.services import (
     publicar_avaliacoes_vencidas,
     responder_avaliacao,
 )
-from quero.moderacao.models import AcaoModeracao
-
 
 # ---------------------------------------------------------------------------
 # Fixtures auxiliares
@@ -68,6 +68,7 @@ def terceiro(db):
 def negociacao_concluida(db, comprador, vendedor, categoria):
     """Cria uma Negociacao concluída com a estrutura mínima necessária."""
     from django.contrib.gis.geos import Point
+
     from quero.anuncios.models import Anuncio
 
     comprador.ponto = Point(-46.6333, -23.5505, srid=4326)
@@ -394,9 +395,7 @@ def test_fila_moderacao_exige_admin(cliente_api, comprador):
 
 
 @pytest.mark.django_db
-def test_admin_ve_fila_moderacao_e_pode_resolver(
-    cliente_api, comprador, vendedor, terceiro, negociacao_concluida
-):
+def test_admin_ve_fila_moderacao_e_pode_resolver(cliente_api, comprador, vendedor, terceiro, negociacao_concluida):
     criar_avaliacao(autor=comprador, negociacao_id=negociacao_concluida.pk, nota=1)
     criar_avaliacao(autor=vendedor, negociacao_id=negociacao_concluida.pk, nota=5)
     avaliacao = Avaliacao.objects.get(negociacao=negociacao_concluida, autor=comprador)

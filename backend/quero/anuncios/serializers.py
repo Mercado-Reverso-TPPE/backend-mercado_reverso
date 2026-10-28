@@ -31,7 +31,24 @@ class AnuncioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Anuncio
-        fields = ("id", "comprador", "titulo", "categoria", "categoria_nome", "descricao", "preco_min", "preco_max", "raio_km", "status", "distancia_km", "ofertas_recebidas", "cidade", "uf", "criado_em", "atualizado_em")
+        fields = (
+            "id",
+            "comprador",
+            "titulo",
+            "categoria",
+            "categoria_nome",
+            "descricao",
+            "preco_min",
+            "preco_max",
+            "raio_km",
+            "status",
+            "distancia_km",
+            "ofertas_recebidas",
+            "cidade",
+            "uf",
+            "criado_em",
+            "atualizado_em",
+        )
         read_only_fields = ("id", "comprador", "status", "cidade", "uf", "criado_em", "atualizado_em")
 
     def get_distancia_km(self, obj):

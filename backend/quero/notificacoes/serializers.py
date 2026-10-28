@@ -29,9 +29,7 @@ class PreferenciaItemSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs["tipo"] == TipoNotificacao.SEGURANCA_CONTA and not attrs["habilitada"]:
-            raise serializers.ValidationError(
-                {"habilitada": "Avisos de segurança da conta não podem ser desativados."}
-            )
+            raise serializers.ValidationError({"habilitada": "Avisos de segurança da conta não podem ser desativados."})
         return attrs
 
 

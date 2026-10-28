@@ -56,9 +56,7 @@ class OfertasDoAnuncioView(APIView):
             ofertas = ofertas.filter(vendedor=request.user)
         paginator = OfertaPagination()
         pagina = paginator.paginate_queryset(ofertas, request, view=self)
-        return paginator.get_paginated_response(
-            OfertaSerializer(pagina, many=True, context={"request": request}).data
-        )
+        return paginator.get_paginated_response(OfertaSerializer(pagina, many=True, context={"request": request}).data)
 
     def post(self, request, anuncio_id):
         serializer = OfertaSerializer(data=request.data)
@@ -194,9 +192,11 @@ class MinhasOfertasView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        ofertas = Oferta.objects.filter(vendedor=request.user).select_related("anuncio", "anuncio__categoria").prefetch_related("eventos")
+        ofertas = (
+            Oferta.objects.filter(vendedor=request.user)
+            .select_related("anuncio", "anuncio__categoria")
+            .prefetch_related("eventos")
+        )
         paginator = OfertaPagination()
         pagina = paginator.paginate_queryset(ofertas, request, view=self)
-        return paginator.get_paginated_response(
-            OfertaSerializer(pagina, many=True, context={"request": request}).data
-        )
+        return paginator.get_paginated_response(OfertaSerializer(pagina, many=True, context={"request": request}).data)

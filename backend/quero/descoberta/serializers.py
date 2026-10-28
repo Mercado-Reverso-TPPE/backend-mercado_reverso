@@ -18,7 +18,9 @@ def validar_faixa_de_preco(attrs, instancia=None):
 
 class FiltrosBuscaSerializer(serializers.Serializer):
     q = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
-    categoria = serializers.SlugRelatedField(slug_field="slug", queryset=Categoria.objects.filter(ativa=True), required=False)
+    categoria = serializers.SlugRelatedField(
+        slug_field="slug", queryset=Categoria.objects.filter(ativa=True), required=False
+    )
     preco_min = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False)
     preco_max = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False)
     distancia_max_km = serializers.IntegerField(min_value=1, required=False)
@@ -45,13 +47,28 @@ class BuscaSalvaSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
-    preco_min = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, allow_null=True)
-    preco_max = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, allow_null=True)
+    preco_min = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, allow_null=True
+    )
+    preco_max = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, allow_null=True
+    )
     distancia_max_km = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
     class Meta:
         model = BuscaSalva
-        fields = ("id", "nome", "termo", "categoria", "preco_min", "preco_max", "distancia_max_km", "ordenacao", "criada_em", "atualizada_em")
+        fields = (
+            "id",
+            "nome",
+            "termo",
+            "categoria",
+            "preco_min",
+            "preco_max",
+            "distancia_max_km",
+            "ordenacao",
+            "criada_em",
+            "atualizada_em",
+        )
         read_only_fields = ("id", "criada_em", "atualizada_em")
 
     def validate_distancia_max_km(self, valor):

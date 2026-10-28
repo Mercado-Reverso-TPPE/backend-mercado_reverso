@@ -66,9 +66,7 @@ class PreferenciasNotificacaoView(APIView):
                 "tipo": tipo,
                 "canal": canal,
                 "habilitada": (
-                    True
-                    if tipo == TipoNotificacao.SEGURANCA_CONTA
-                    else armazenadas.get((tipo, canal), True)
+                    True if tipo == TipoNotificacao.SEGURANCA_CONTA else armazenadas.get((tipo, canal), True)
                 ),
             }
             for tipo in TipoNotificacao.values

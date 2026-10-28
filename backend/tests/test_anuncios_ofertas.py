@@ -64,18 +64,16 @@ def test_listagem_de_categorias_expõe_apenas_categorias_ativas(cliente_api, cat
     resposta = cliente_api.get("/api/v1/categorias")
 
     assert resposta.status_code == status.HTTP_200_OK
-    slugs_ativos = list(
-        Categoria.objects.filter(ativa=True)
-        .order_by("nome")
-        .values_list("slug", flat=True)
-    )
+    slugs_ativos = list(Categoria.objects.filter(ativa=True).order_by("nome").values_list("slug", flat=True))
     assert [item["slug"] for item in resposta.data] == slugs_ativos
     assert categoria.slug in slugs_ativos
     assert "oculta" not in slugs_ativos
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("estado_anuncio", [Anuncio.Status.PAUSADO, Anuncio.Status.ENCERRADO, Anuncio.Status.EM_NEGOCIACAO])
+@pytest.mark.parametrize(
+    "estado_anuncio", [Anuncio.Status.PAUSADO, Anuncio.Status.ENCERRADO, Anuncio.Status.EM_NEGOCIACAO]
+)
 def test_nao_e_possivel_ofertar_em_anuncio_inativo(anuncio, vendedor, estado_anuncio):
     anuncio.status = estado_anuncio
     anuncio.save(update_fields=["status"])
@@ -86,7 +84,11 @@ def test_nao_e_possivel_ofertar_em_anuncio_inativo(anuncio, vendedor, estado_anu
         enviar_oferta(
             vendedor=vendedor,
             anuncio_id=anuncio.pk,
-            dados={"descricao": "Minha oferta", "estado_conservacao": Oferta.EstadoConservacao.USADO_BOM, "preco": "100.00"},
+            dados={
+                "descricao": "Minha oferta",
+                "estado_conservacao": Oferta.EstadoConservacao.USADO_BOM,
+                "preco": "100.00",
+            },
         )
 
 
@@ -95,7 +97,11 @@ def test_nao_e_possivel_ofertar_em_anuncio_inativo(anuncio, vendedor, estado_anu
 def test_oferta_so_pode_ser_enviada_por_vendedor_dentro_do_raio(anuncio, vendedor, longitude):
     vendedor.ponto = Point(longitude, -23.5505, srid=4326)
     vendedor.save(update_fields=["ponto"])
-    dados = {"descricao": "Notebook em ótimo estado", "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO, "preco": "1200.00"}
+    dados = {
+        "descricao": "Notebook em ótimo estado",
+        "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO,
+        "preco": "1200.00",
+    }
 
     if longitude == -46.6333:
         oferta = enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
@@ -110,7 +116,11 @@ def test_oferta_so_pode_ser_enviada_por_vendedor_dentro_do_raio(anuncio, vendedo
 def test_oferta_unica_por_vendedor_edicao_e_retirada_registram_historico(anuncio, vendedor):
     vendedor.ponto = anuncio.comprador.ponto
     vendedor.save(update_fields=["ponto"])
-    dados = {"descricao": "Notebook em ótimo estado", "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO, "preco": "1200.00"}
+    dados = {
+        "descricao": "Notebook em ótimo estado",
+        "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO,
+        "preco": "1200.00",
+    }
     oferta = enviar_oferta(vendedor=vendedor, anuncio_id=anuncio.pk, dados=dados)
 
     with pytest.raises(ValidationError, match="oferta ativa"):
@@ -125,9 +135,7 @@ def test_oferta_unica_por_vendedor_edicao_e_retirada_registram_historico(anuncio
 
 
 @pytest.mark.django_db
-def test_comprador_ve_ofertas_do_anuncio_e_vendedor_ve_apenas_as_proprias(
-    cliente_api, anuncio, vendedor
-):
+def test_comprador_ve_ofertas_do_anuncio_e_vendedor_ve_apenas_as_proprias(cliente_api, anuncio, vendedor):
     outro_vendedor = Usuario.objects.create_user(
         email="outro@example.com", password="Senha-forte-123!", nome="Outro Vendedor"
     )

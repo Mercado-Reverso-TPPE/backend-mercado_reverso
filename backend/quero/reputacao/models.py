@@ -23,9 +23,7 @@ class Avaliacao(models.Model):
         on_delete=models.PROTECT,
         related_name="avaliacoes_recebidas",
     )
-    nota = models.PositiveSmallIntegerField(
-        validators=(MinValueValidator(1), MaxValueValidator(5))
-    )
+    nota = models.PositiveSmallIntegerField(validators=(MinValueValidator(1), MaxValueValidator(5)))
     comentario = models.TextField(max_length=2000, blank=True)
     resposta = models.TextField(max_length=2000, blank=True)
     respondida_em = models.DateTimeField(null=True, blank=True)

@@ -21,11 +21,15 @@ logger = logging.getLogger(__name__)
 def _habilitada(usuario, tipo, canal):
     if tipo == TipoNotificacao.SEGURANCA_CONTA:
         return True
-    preferencia = PreferenciaNotificacao.objects.filter(
-        usuario=usuario,
-        tipo=tipo,
-        canal=canal,
-    ).values_list("habilitada", flat=True).first()
+    preferencia = (
+        PreferenciaNotificacao.objects.filter(
+            usuario=usuario,
+            tipo=tipo,
+            canal=canal,
+        )
+        .values_list("habilitada", flat=True)
+        .first()
+    )
     return preferencia is not False
 
 
@@ -62,9 +66,7 @@ def emitir_notificacao(
         notificacao = None
         if app_habilitado:
             notificacao = (
-                Notificacao.objects.select_for_update()
-                .filter(usuario=usuario, agrupamento=agrupamento)
-                .first()
+                Notificacao.objects.select_for_update().filter(usuario=usuario, agrupamento=agrupamento).first()
             )
             if notificacao is None:
                 try:
@@ -171,10 +173,14 @@ def emitir_alerta_seguranca(*, usuario, titulo, mensagem, chave_evento, contexto
 
 
 def notificar_vendedores_compativeis(anuncio_id):
-    anuncio = Anuncio.objects.select_related("comprador", "categoria").filter(
-        pk=anuncio_id,
-        status=Anuncio.Status.ATIVO,
-    ).first()
+    anuncio = (
+        Anuncio.objects.select_related("comprador", "categoria")
+        .filter(
+            pk=anuncio_id,
+            status=Anuncio.Status.ATIVO,
+        )
+        .first()
+    )
     if anuncio is None:
         return 0
     produtos = Produto.objects.filter(
@@ -187,13 +193,16 @@ def notificar_vendedores_compativeis(anuncio_id):
     else:
         # A polygon can be temporarily unavailable while the location materialization runs.
         produtos = produtos.filter(
-            Q(vendedor__cidade__iexact=anuncio.comprador.cidade)
-            & Q(vendedor__uf__iexact=anuncio.comprador.uf)
+            Q(vendedor__cidade__iexact=anuncio.comprador.cidade) & Q(vendedor__uf__iexact=anuncio.comprador.uf)
         )
-    recipients = produtos.exclude(vendedor_id=anuncio.comprador_id).values_list(
-        "vendedor_id",
-        flat=True,
-    ).distinct()
+    recipients = (
+        produtos.exclude(vendedor_id=anuncio.comprador_id)
+        .values_list(
+            "vendedor_id",
+            flat=True,
+        )
+        .distinct()
+    )
     count = 0
     for recipient_id in recipients:
         from quero.contas.models import Usuario
@@ -203,7 +212,7 @@ def notificar_vendedores_compativeis(anuncio_id):
             usuario=usuario,
             tipo=TipoNotificacao.ANUNCIO_COMPATIVEL,
             titulo="Novo anúncio compatível na sua região",
-            mensagem=f'“{anuncio.titulo}” pode combinar com um produto disponível do seu catálogo.',
+            mensagem=f"“{anuncio.titulo}” pode combinar com um produto disponível do seu catálogo.",
             chave_evento=f"anuncio:{anuncio.pk}:regional:{usuario.pk}",
             agrupamento=f"anuncio_compativel:{usuario.pk}",
             anuncio=anuncio,
@@ -218,21 +227,21 @@ def notificar_vendedores_compativeis(anuncio_id):
 
 
 def notificar_evento_negociacao(evento_id):
-    evento = EventoNegociacao.objects.select_related(
-        "autor",
-        "oferta",
-        "oferta__anuncio",
-        "oferta__anuncio__comprador",
-        "oferta__vendedor",
-    ).filter(pk=evento_id).first()
+    evento = (
+        EventoNegociacao.objects.select_related(
+            "autor",
+            "oferta",
+            "oferta__anuncio",
+            "oferta__anuncio__comprador",
+            "oferta__vendedor",
+        )
+        .filter(pk=evento_id)
+        .first()
+    )
     if evento is None:
         return
     oferta = evento.oferta
-    recipient = (
-        oferta.vendedor
-        if evento.autor_id == oferta.anuncio.comprador_id
-        else oferta.anuncio.comprador
-    )
+    recipient = oferta.vendedor if evento.autor_id == oferta.anuncio.comprador_id else oferta.anuncio.comprador
     if recipient.pk == evento.autor_id:
         return
     builders = {
@@ -316,12 +325,16 @@ def notificar_evento_negociacao(evento_id):
 
 
 def notificar_negociacao_concluida(negociacao_id):
-    negociacao = Negociacao.objects.select_related(
-        "oferta",
-        "oferta__anuncio",
-        "oferta__anuncio__comprador",
-        "oferta__vendedor",
-    ).filter(pk=negociacao_id, status=Negociacao.Status.CONCLUIDA).first()
+    negociacao = (
+        Negociacao.objects.select_related(
+            "oferta",
+            "oferta__anuncio",
+            "oferta__anuncio__comprador",
+            "oferta__vendedor",
+        )
+        .filter(pk=negociacao_id, status=Negociacao.Status.CONCLUIDA)
+        .first()
+    )
     if negociacao is None:
         return
     oferta = negociacao.oferta
@@ -343,12 +356,16 @@ def notificar_negociacao_concluida(negociacao_id):
 def notificar_avaliacao_publicada(avaliacao_id):
     from quero.reputacao.models import Avaliacao
 
-    avaliacao = Avaliacao.objects.select_related(
-        "avaliado",
-        "negociacao",
-        "negociacao__oferta",
-        "negociacao__oferta__anuncio",
-    ).filter(pk=avaliacao_id, publicada_em__isnull=False).first()
+    avaliacao = (
+        Avaliacao.objects.select_related(
+            "avaliado",
+            "negociacao",
+            "negociacao__oferta",
+            "negociacao__oferta__anuncio",
+        )
+        .filter(pk=avaliacao_id, publicada_em__isnull=False)
+        .first()
+    )
     if avaliacao is None:
         return
     oferta = avaliacao.negociacao.oferta

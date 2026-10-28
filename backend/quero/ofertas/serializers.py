@@ -49,8 +49,34 @@ class OfertaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Oferta
-        fields = ("id", "anuncio_id", "vendedor_id", "vendedor_nome", "produto_id", "produto_nome", "produto_foto", "descricao", "estado_conservacao", "preco", "status", "criada_em", "atualizada_em", "historico")
-        read_only_fields = ("id", "anuncio_id", "vendedor_id", "vendedor_nome", "produto_nome", "produto_foto", "status", "criada_em", "atualizada_em", "historico")
+        fields = (
+            "id",
+            "anuncio_id",
+            "vendedor_id",
+            "vendedor_nome",
+            "produto_id",
+            "produto_nome",
+            "produto_foto",
+            "descricao",
+            "estado_conservacao",
+            "preco",
+            "status",
+            "criada_em",
+            "atualizada_em",
+            "historico",
+        )
+        read_only_fields = (
+            "id",
+            "anuncio_id",
+            "vendedor_id",
+            "vendedor_nome",
+            "produto_nome",
+            "produto_foto",
+            "status",
+            "criada_em",
+            "atualizada_em",
+            "historico",
+        )
         extra_kwargs = {"descricao": {"required": False}, "estado_conservacao": {"required": False}}
 
     def get_produto_foto(self, obj):

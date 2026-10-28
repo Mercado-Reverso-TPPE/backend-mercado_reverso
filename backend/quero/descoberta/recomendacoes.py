@@ -18,9 +18,32 @@ from quero.descoberta.models import Recomendacao
 logger = logging.getLogger(__name__)
 
 _TOKENS_IGNORADOS = {
-    "a", "ao", "aos", "as", "com", "da", "das", "de", "do", "dos",
-    "e", "em", "entre", "mais", "na", "nas", "no", "nos", "o", "os",
-    "para", "por", "que", "sem", "um", "uma",
+    "a",
+    "ao",
+    "aos",
+    "as",
+    "com",
+    "da",
+    "das",
+    "de",
+    "do",
+    "dos",
+    "e",
+    "em",
+    "entre",
+    "mais",
+    "na",
+    "nas",
+    "no",
+    "nos",
+    "o",
+    "os",
+    "para",
+    "por",
+    "que",
+    "sem",
+    "um",
+    "uma",
 }
 _TEMPO_ATUALIZACAO = timedelta(minutes=5)
 _TEMPO_LEASE = timedelta(minutes=10)
@@ -213,8 +236,7 @@ def processar_proxima_atualizacao():
                 recomendacoes_tentar_em__lte=agora,
             )
             .filter(
-                Q(recomendacoes_processando_em__isnull=True)
-                | Q(recomendacoes_processando_em__lt=agora - _TEMPO_LEASE)
+                Q(recomendacoes_processando_em__isnull=True) | Q(recomendacoes_processando_em__lt=agora - _TEMPO_LEASE)
             )
             .order_by("recomendacoes_solicitadas_em", "pk")
             .first()
@@ -255,11 +277,7 @@ def processar_proxima_atualizacao():
 
 @transaction.atomic
 def descartar_recomendacao(*, anuncio, recomendacao_id):
-    recomendacao = (
-        Recomendacao.objects.select_for_update()
-        .filter(anuncio=anuncio, pk=recomendacao_id)
-        .first()
-    )
+    recomendacao = Recomendacao.objects.select_for_update().filter(anuncio=anuncio, pk=recomendacao_id).first()
     if recomendacao is None:
         return None
     if recomendacao.estado == Recomendacao.Estado.DESCARTADA:

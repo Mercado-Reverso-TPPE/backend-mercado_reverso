@@ -1,6 +1,6 @@
 import pytest
-from django.core.cache import cache
 from django.contrib.gis.geos import Point
+from django.core.cache import cache
 from rest_framework.test import APIClient
 
 from quero.anuncios.models import Anuncio, Categoria

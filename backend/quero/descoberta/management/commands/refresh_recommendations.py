@@ -23,8 +23,7 @@ class Command(BaseCommand):
         if options["enqueue_all"]:
             limite = agora - timedelta(minutes=5)
             Anuncio.objects.filter(status=Anuncio.Status.ATIVO, recomendacoes_solicitadas_em__isnull=True).filter(
-                Q(recomendacoes_calculadas_em__isnull=True)
-                | Q(recomendacoes_calculadas_em__lt=limite)
+                Q(recomendacoes_calculadas_em__isnull=True) | Q(recomendacoes_calculadas_em__lt=limite)
             ).update(
                 recomendacoes_solicitadas_em=agora,
                 recomendacoes_tentar_em=agora,

@@ -6,9 +6,10 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from .geocoding import localizar as geocodificar
 from .models import Usuario
 from .services import acesso_bloqueado, atualizar_perfil, limpar_falhas_login, registrar_falha_login
-from .geocoding import localizar as geocodificar
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -25,6 +26,7 @@ class LoginSerializer(TokenObtainPairSerializer):
             raise AuthenticationFailed("E-mail ou senha inválidos.") from exc
         limpar_falhas_login(email)
         return dados
+
 
 class LocalizacaoSerializer(serializers.Serializer):
     cep = serializers.CharField(required=False, allow_blank=True, max_length=9)
@@ -58,6 +60,7 @@ class LocalizacaoSerializer(serializers.Serializer):
         }
         return attrs
 
+
 class CadastroSerializer(serializers.ModelSerializer):
     senha = serializers.CharField(write_only=True, min_length=10, style={"input_type": "password"})
     longitude = serializers.FloatField(write_only=True, required=False)
@@ -85,11 +88,17 @@ class CadastroSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        loc = {key: validated_data.pop(key) for key in ("longitude", "latitude", "cep", "cidade", "uf") if key in validated_data}
+        loc = {
+            key: validated_data.pop(key)
+            for key in ("longitude", "latitude", "cep", "cidade", "uf")
+            if key in validated_data
+        }
         password = validated_data.pop("senha")
         if "longitude" not in loc and (loc.get("cep") or loc.get("cidade")):
             try:
-                ponto, cep, cidade, uf = geocodificar(cep=loc.get("cep", ""), cidade=loc.get("cidade", ""), uf=loc.get("uf", ""))
+                ponto, cep, cidade, uf = geocodificar(
+                    cep=loc.get("cep", ""), cidade=loc.get("cidade", ""), uf=loc.get("uf", "")
+                )
             except DjangoValidationError as exc:
                 raise serializers.ValidationError(exc.messages) from exc
             loc.update({"longitude": ponto.x, "latitude": ponto.y, "cep": cep, "cidade": cidade, "uf": uf})
@@ -102,6 +111,7 @@ class CadastroSerializer(serializers.ModelSerializer):
             user.localizacao_atualizada_em = timezone.now()
             user.save(update_fields=["ponto", "cep", "cidade", "uf", "localizacao_atualizada_em"])
         return user
+
 
 class PerfilSerializer(serializers.ModelSerializer):
     localizacao = LocalizacaoSerializer(required=False, source="*")

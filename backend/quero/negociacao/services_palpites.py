@@ -47,9 +47,8 @@ def obter_estimativa_preco(*, anuncio):
     if anuncio.preco_min is None and anuncio.preco_max is None:
         diverge = None
     else:
-        diverge = (
-            (anuncio.preco_min is not None and media < anuncio.preco_min)
-            or (anuncio.preco_max is not None and media > anuncio.preco_max)
+        diverge = (anuncio.preco_min is not None and media < anuncio.preco_min) or (
+            anuncio.preco_max is not None and media > anuncio.preco_max
         )
 
     return {

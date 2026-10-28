@@ -1,9 +1,9 @@
 import uuid
 
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
-from django.core.validators import MinValueValidator
 
 
 class Oferta(models.Model):

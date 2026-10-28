@@ -1,21 +1,20 @@
 import hashlib
+import logging
 import uuid
 from datetime import timedelta
-import logging
-from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.contrib.auth import password_validation
 from django.contrib.auth.tokens import default_token_generator
+from django.core import signing
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
-from django.core.cache import cache
-from django.core import signing
 from django.db import transaction
-from django.utils.encoding import force_str
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.utils.encoding import force_bytes
 
 from .models import Usuario
 
@@ -74,7 +73,11 @@ def solicitar_redefinicao_senha(email):
     query = dict(parse_qsl(partes_url.query))
     query.update({"uid": uid, "token": token})
     link = urlunsplit(partes_url._replace(query=urlencode(query)))
-    mensagem = f"Use o link abaixo para cadastrar uma nova senha. Ele expira em {settings.PASSWORD_RESET_TIMEOUT // 60} minutos e pode ser usado uma vez:\n\n{link}"
+    minutos = settings.PASSWORD_RESET_TIMEOUT // 60
+    mensagem = (
+        f"Use o link abaixo para cadastrar uma nova senha. Ele expira em {minutos} minutos "
+        f"e pode ser usado uma vez:\n\n{link}"
+    )
 
     try:
         send_mail("Redefinição de senha — Quero.", mensagem, settings.DEFAULT_FROM_EMAIL, [usuario.email])
@@ -117,9 +120,7 @@ def atualizar_perfil(*, usuario, dados):
 
     if localizacao is not None:
         alterou_endereco = any(
-            valor != getattr(usuario, campo)
-            for campo, valor in localizacao.items()
-            if campo in ("cep", "cidade", "uf")
+            valor != getattr(usuario, campo) for campo, valor in localizacao.items() if campo in ("cep", "cidade", "uf")
         )
         precisa_geocodificar = precisa_geocodificar or (
             ponto is None
@@ -136,13 +137,8 @@ def atualizar_perfil(*, usuario, dados):
             )
             localizacao.update({"cep": cep, "cidade": cidade, "uf": uf})
 
-        localizacao_mudou = (
-            (ponto is not None and ponto != usuario.ponto)
-            or any(
-                valor != getattr(usuario, campo)
-                for campo, valor in localizacao.items()
-                if campo in ("cep", "cidade", "uf")
-            )
+        localizacao_mudou = (ponto is not None and ponto != usuario.ponto) or any(
+            valor != getattr(usuario, campo) for campo, valor in localizacao.items() if campo in ("cep", "cidade", "uf")
         )
 
     for campo, valor in dados.items():
@@ -156,9 +152,7 @@ def atualizar_perfil(*, usuario, dados):
         if ponto is not None:
             usuario.ponto = ponto
         usuario.localizacao_atualizada_em = timezone.now()
-        usuario.save(
-            update_fields=["cep", "cidade", "uf", "ponto", "localizacao_atualizada_em"]
-        )
+        usuario.save(update_fields=["cep", "cidade", "uf", "ponto", "localizacao_atualizada_em"])
 
         from quero.anuncios.models import Anuncio
 
@@ -188,7 +182,8 @@ def solicitar_alteracao_email(*, usuario, novo_email):
     try:
         enviados = send_mail(
             "Confirme seu novo e-mail — Quero.",
-            f"Confirme a troca de e-mail pelo link abaixo. Ele expira em {settings.EMAIL_CHANGE_TIMEOUT // 3600} horas:\n\n{link}",
+            f"Confirme a troca de e-mail pelo link abaixo. "
+            f"Ele expira em {settings.EMAIL_CHANGE_TIMEOUT // 3600} horas:\n\n{link}",
             settings.DEFAULT_FROM_EMAIL,
             [novo_email],
         )
@@ -211,7 +206,14 @@ def confirmar_alteracao_email(*, token):
         usuario = Usuario.objects.select_for_update().get(pk=dados["usuario_id"])
         novo_email = dados["novo_email"]
         email_atual = dados["email_atual"]
-    except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError, ValueError, Usuario.DoesNotExist) as exc:
+    except (
+        signing.BadSignature,
+        signing.SignatureExpired,
+        KeyError,
+        TypeError,
+        ValueError,
+        Usuario.DoesNotExist,
+    ) as exc:
         raise ValidationError("O link de confirmação é inválido ou expirou.") from exc
 
     if usuario.email != email_atual:

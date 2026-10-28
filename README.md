@@ -139,8 +139,19 @@ A listagem e a alteração de leitura são sempre limitadas ao usuário autentic
 
 O envio de e-mail ocorre após o commit; falhas e respostas sem envio são registradas no log sem reverter a operação de domínio. Agende `python backend/manage.py notificar_contrapropostas_vencendo` de hora em hora para criar lembretes idempotentes até 24 horas antes do vencimento.
 
+O modelo físico (diagrama entidade-relacionamento e DDL) está em [`docs/modelo-fisico.md`](docs/modelo-fisico.md) e [`docs/schema.sql`](docs/schema.sql).
+
 ## Testes
 
 Os testes parametrizados ficam em `backend/tests` e usam `pytest-django`. Com os serviços iniciados, execute `docker compose exec backend pytest`. A suíte usa banco PostGIS de teste criado pelo Django; chamadas ao serviço externo de geocodificação são substituídas por respostas simuladas.
+
+## Lint
+
+O lint e a formatação usam o [ruff](https://docs.astral.sh/ruff/), configurado em `backend/pyproject.toml`. O CI falha se houver aviso ou arquivo fora do padrão.
+
+```sh
+docker compose exec backend ruff check .          # lint
+docker compose exec backend ruff format .         # formata o código
+```
 
 Este compose é para desenvolvimento local. Troque as credenciais padrão antes de expor os serviços fora da máquina local.
