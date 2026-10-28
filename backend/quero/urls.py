@@ -127,3 +127,6 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+if "rest_framework.authentication.SessionAuthentication" in settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]:
+    urlpatterns += [path("api-auth/", include("rest_framework.urls"))]
