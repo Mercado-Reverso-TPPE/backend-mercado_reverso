@@ -90,7 +90,11 @@ def oferta(anuncio, vendedor_no_raio):
     return enviar_oferta(
         vendedor=vendedor_no_raio,
         anuncio_id=anuncio.pk,
-        dados={"descricao": "Notebook revisado", "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO, "preco": "1500.00"},
+        dados={
+            "descricao": "Notebook revisado",
+            "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO,
+            "preco": "1500.00",
+        },
     )
 
 

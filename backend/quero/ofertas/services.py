@@ -17,19 +17,7 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
     except Anuncio.DoesNotExist as exc:
         raise ValidationError("O anúncio não existe.") from exc
 
-    if anuncio.status != Anuncio.Status.ATIVO:
-        raise ValidationError("Só é possível ofertar em anúncios ativos.")
-    if anuncio.comprador_id == vendedor.pk:
-        raise ValidationError("Não é possível ofertar no próprio anúncio.")
-    if bloqueio_entre(anuncio.comprador_id, vendedor.pk):
-        raise ValidationError("Não é possível ofertar neste anúncio: há um bloqueio entre você e o comprador.")
-    ponto_vendedor = vendedor.ponto
-    if ponto_vendedor is None:
-        raise ValidationError("Cadastre uma localização antes de enviar uma oferta.")
-
-    esta_no_raio = Anuncio.objects.filter(pk=anuncio.pk, alcance__intersects=ponto_vendedor).exists()
-    if not esta_no_raio:
-        raise ValidationError("Sua localização está fora do raio deste anúncio.")
+    _validar_elegibilidade(anuncio=anuncio, vendedor=vendedor)
 
     dados = dados.copy()
     produto_id = dados.pop("produto_id", None)
@@ -57,6 +45,22 @@ def enviar_oferta(*, vendedor, anuncio_id, dados):
 
 
 CAMPOS_COPIADOS_DO_PRODUTO = ("descricao", "estado_conservacao", "preco")
+
+
+def _validar_elegibilidade(*, anuncio, vendedor):
+    if anuncio.status != Anuncio.Status.ATIVO:
+        raise ValidationError("Só é possível ofertar em anúncios ativos.")
+    if anuncio.comprador_id == vendedor.pk:
+        raise ValidationError("Não é possível ofertar no próprio anúncio.")
+    if bloqueio_entre(anuncio.comprador_id, vendedor.pk):
+        raise ValidationError("Não é possível ofertar neste anúncio: há um bloqueio entre você e o comprador.")
+    ponto_vendedor = vendedor.ponto
+    if ponto_vendedor is None:
+        raise ValidationError("Cadastre uma localização antes de enviar uma oferta.")
+
+    esta_no_raio = Anuncio.objects.filter(pk=anuncio.pk, alcance__intersects=ponto_vendedor).exists()
+    if not esta_no_raio:
+        raise ValidationError("Sua localização está fora do raio deste anúncio.")
 
 
 def _snapshot_do_produto(*, vendedor, produto_id, dados):

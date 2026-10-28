@@ -78,10 +78,7 @@ def enviar_mensagem(*, oferta, autor, texto):
 
 def marcar_mensagens_como_lidas(*, oferta, usuario):
     return (
-        mensagens_da_conversa(oferta)
-        .filter(lida_em__isnull=True)
-        .exclude(autor=usuario)
-        .update(lida_em=timezone.now())
+        mensagens_da_conversa(oferta).filter(lida_em__isnull=True).exclude(autor=usuario).update(lida_em=timezone.now())
     )
 
 
@@ -122,7 +119,9 @@ def prazo_confirmacao_vencido(negociacao, agora=None):
 def negociacoes_do_usuario(usuario):
     return (
         Negociacao.objects.filter(Q(oferta__vendedor=usuario) | Q(oferta__anuncio__comprador=usuario))
-        .select_related("oferta", "oferta__vendedor", "oferta__anuncio", "oferta__anuncio__comprador", "oferta__anuncio__categoria")
+        .select_related(
+            "oferta", "oferta__vendedor", "oferta__anuncio", "oferta__anuncio__comprador", "oferta__anuncio__categoria"
+        )
         .prefetch_related("avaliacoes")
     )
 

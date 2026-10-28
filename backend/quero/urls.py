@@ -91,9 +91,21 @@ urlpatterns = [
     path("api/v1/bloqueios", BloqueiosView.as_view(), name="bloqueios"),
     path("api/v1/bloqueios/<uuid:usuario_id>", BloqueioDetailView.as_view(), name="desbloqueio"),
     path("api/v1/negociacoes/<uuid:negociacao_id>", NegociacaoDetailView.as_view(), name="negociacao"),
-    path("api/v1/negociacoes/<uuid:negociacao_id>/conclusao", SolicitarConclusaoView.as_view(), name="solicitar-conclusao"),
-    path("api/v1/negociacoes/<uuid:negociacao_id>/conclusao/confirmacao", ConfirmarConclusaoView.as_view(), name="confirmar-conclusao"),
-    path("api/v1/negociacoes/<uuid:negociacao_id>/conclusao/recusa", RecusarConclusaoView.as_view(), name="recusar-conclusao"),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/conclusao",
+        SolicitarConclusaoView.as_view(),
+        name="solicitar-conclusao",
+    ),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/conclusao/confirmacao",
+        ConfirmarConclusaoView.as_view(),
+        name="confirmar-conclusao",
+    ),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/conclusao/recusa",
+        RecusarConclusaoView.as_view(),
+        name="recusar-conclusao",
+    ),
     path("api/v1/historico", HistoricoView.as_view(), name="historico"),
     path("api/v1/historico/<uuid:negociacao_id>", HistoricoDetailView.as_view(), name="historico-detalhe"),
     path(

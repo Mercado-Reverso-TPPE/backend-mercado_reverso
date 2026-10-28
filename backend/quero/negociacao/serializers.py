@@ -131,7 +131,11 @@ class HistoricoDetalheSerializer(NegociacaoSerializer):
         return serializers.DecimalField(max_digits=10, decimal_places=2).to_representation(preco)
 
     def get_precos(self, obj):
-        eventos = [e for e in self._eventos(obj) if e.preco is not None and e.tipo_evento != EventoNegociacao.TipoEvento.MENSAGEM]
+        eventos = [
+            e
+            for e in self._eventos(obj)
+            if e.preco is not None and e.tipo_evento != EventoNegociacao.TipoEvento.MENSAGEM
+        ]
         return PrecoNegociadoSerializer(eventos, many=True).data
 
     def get_mensagens(self, obj):

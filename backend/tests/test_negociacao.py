@@ -31,7 +31,9 @@ def recusar(cliente_api, negociacao):
 
 
 def vencer_prazo(negociacao, settings):
-    negociacao.conclusao_solicitada_em = timezone.now() - timedelta(hours=settings.NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS, minutes=1)
+    negociacao.conclusao_solicitada_em = timezone.now() - timedelta(
+        hours=settings.NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS, minutes=1
+    )
     negociacao.save(update_fields=["conclusao_solicitada_em"])
 
 
@@ -63,7 +65,10 @@ def test_conclusao_bilateral_encerra_anuncio_e_vende_produto(cliente_api, negoci
     )
     assert negociacao.confirmada_em is not None and negociacao.concluida_em is not None
     convites = Notificacao.objects.filter(negociacao=negociacao, tipo="avaliacao_disponivel")
-    assert set(convites.values_list("usuario_id", flat=True)) == {negociacao.oferta.vendedor_id, negociacao.oferta.anuncio.comprador_id}
+    assert set(convites.values_list("usuario_id", flat=True)) == {
+        negociacao.oferta.vendedor_id,
+        negociacao.oferta.anuncio.comprador_id,
+    }
 
 
 @pytest.mark.django_db
@@ -132,7 +137,9 @@ def test_prazo_vencido_conclui_automaticamente_pelo_comando(negociacao, settings
 
 @pytest.mark.django_db
 def test_prazo_nao_vencido_nao_conclui(negociacao, settings):
-    negociacao.conclusao_solicitada_em = timezone.now() - timedelta(hours=settings.NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS - 1)
+    negociacao.conclusao_solicitada_em = timezone.now() - timedelta(
+        hours=settings.NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS - 1
+    )
     negociacao.save(update_fields=["conclusao_solicitada_em"])
 
     call_command("concluir_negociacoes_expiradas")
@@ -169,7 +176,11 @@ def test_negociacao_concluida_e_imutavel(cliente_api, negociacao):
     solicitar(cliente_api, negociacao)
     confirmar(cliente_api, negociacao)
 
-    for resposta in (solicitar(cliente_api, negociacao), confirmar(cliente_api, negociacao), recusar(cliente_api, negociacao)):
+    for resposta in (
+        solicitar(cliente_api, negociacao),
+        confirmar(cliente_api, negociacao),
+        recusar(cliente_api, negociacao),
+    ):
         assert resposta.status_code == status.HTTP_400_BAD_REQUEST
 
     negociacao.refresh_from_db()
@@ -266,6 +277,12 @@ def test_estado_da_avaliacao_reflete_avaliacao_enviada(cliente_api, negociacao):
     Avaliacao.objects.create(negociacao=negociacao, autor=comprador, avaliado=negociacao.oferta.vendedor, nota=5)
 
     cliente_api.force_authenticate(user=comprador)
-    assert cliente_api.get(f"/api/v1/historico/{negociacao.pk}").data["avaliacao"] == {"disponivel": False, "enviada": True}
+    assert cliente_api.get(f"/api/v1/historico/{negociacao.pk}").data["avaliacao"] == {
+        "disponivel": False,
+        "enviada": True,
+    }
     cliente_api.force_authenticate(user=negociacao.oferta.vendedor)
-    assert cliente_api.get(f"/api/v1/historico/{negociacao.pk}").data["avaliacao"] == {"disponivel": True, "enviada": False}
+    assert cliente_api.get(f"/api/v1/historico/{negociacao.pk}").data["avaliacao"] == {
+        "disponivel": True,
+        "enviada": False,
+    }

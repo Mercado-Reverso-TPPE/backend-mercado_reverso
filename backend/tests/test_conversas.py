@@ -178,7 +178,9 @@ def test_bloqueio_impede_mensagens_sem_apagar_historico(cliente_api, oferta):
     enviar(cliente_api, oferta.vendedor, oferta, "Antes do bloqueio")
 
     cliente_api.force_authenticate(user=comprador)
-    resposta = cliente_api.post("/api/v1/bloqueios", {"usuario_id": str(oferta.vendedor.pk), "motivo": "Insistente"}, format="json")
+    resposta = cliente_api.post(
+        "/api/v1/bloqueios", {"usuario_id": str(oferta.vendedor.pk), "motivo": "Insistente"}, format="json"
+    )
     assert resposta.status_code == status.HTTP_201_CREATED
     assert cliente_api.get("/api/v1/bloqueios").data[0]["usuario_id"] == str(oferta.vendedor.pk)
 
@@ -266,6 +268,8 @@ def test_denuncia_valida_motivo_e_mensagem(cliente_api, oferta, dados, erro):
 def test_nao_e_possivel_denunciar_a_propria_mensagem(cliente_api, oferta):
     mensagem = enviar(cliente_api, oferta.vendedor, oferta, "Minha").data
 
-    resposta = cliente_api.post(f"/api/v1/conversas/{oferta.pk}/denuncias", {"motivo": "Teste", "mensagem_id": mensagem["id"]}, format="json")
+    resposta = cliente_api.post(
+        f"/api/v1/conversas/{oferta.pk}/denuncias", {"motivo": "Teste", "mensagem_id": mensagem["id"]}, format="json"
+    )
 
     assert resposta.status_code == status.HTTP_400_BAD_REQUEST
