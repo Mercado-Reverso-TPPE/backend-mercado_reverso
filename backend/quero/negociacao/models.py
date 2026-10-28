@@ -75,6 +75,10 @@ class Negociacao(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        if not self._state.adding:
+            status_salvo = Negociacao.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+            if status_salvo == self.Status.CONCLUIDA:
+                raise ValidationError("Negociações concluídas são imutáveis.")
         if self.oferta_id:
             from quero.ofertas.models import Oferta
 
