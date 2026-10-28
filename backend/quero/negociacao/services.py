@@ -9,7 +9,6 @@ from django.utils import timezone
 
 from quero.anuncios.models import Anuncio
 from quero.moderacao.services import bloqueio_entre
-from quero.notificacoes.models import Notificacao
 from quero.ofertas.models import EventoNegociacao, Oferta
 
 from .models import Negociacao
@@ -160,18 +159,7 @@ def _concluir(negociacao, *, agora, confirmada):
     anuncio = Anuncio.objects.select_for_update().get(pk=negociacao.oferta.anuncio_id)
     anuncio.status = Anuncio.Status.ENCERRADO
     anuncio.save(update_fields=["status", "atualizado_em"])
-
-    for usuario_id in (anuncio.comprador_id, negociacao.oferta.vendedor_id):
-        Notificacao.objects.create(
-            usuario_id=usuario_id,
-            tipo="avaliacao_disponivel",
-            titulo="Avalie sua negociação",
-            mensagem=f"A negociação de “{anuncio.titulo}” foi concluída. Conte como foi a experiência.",
-            anuncio=anuncio,
-            oferta=negociacao.oferta,
-            negociacao=negociacao,
-            agrupamento=f"avaliacao:{negociacao.pk}",
-        )
+    # As partes são convidadas a avaliar pelo signal de notificações (negociação concluída).
     return negociacao
 
 

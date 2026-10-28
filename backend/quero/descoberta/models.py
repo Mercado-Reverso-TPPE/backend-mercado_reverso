@@ -22,6 +22,7 @@ class Recomendacao(models.Model):
         related_name="recomendacoes",
     )
     pontuacao = models.DecimalField(max_digits=5, decimal_places=2)
+    explicacao = models.JSONField(default=dict, blank=True)
     estado = models.CharField(max_length=16, choices=Estado.choices, default=Estado.ATIVA)
     calculada_em = models.DateTimeField(auto_now=True)
 

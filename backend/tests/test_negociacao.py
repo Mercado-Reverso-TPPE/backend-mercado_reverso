@@ -9,6 +9,7 @@ from rest_framework import status
 from quero.anuncios.models import Anuncio
 from quero.catalogo.models import Produto
 from quero.negociacao.models import Negociacao
+from quero.notificacoes.catalogo import TipoNotificacao
 from quero.notificacoes.models import Notificacao
 from quero.reputacao.models import Avaliacao
 
@@ -45,13 +46,16 @@ def assert_estados(negociacao, *, negociacao_status, anuncio_status, produto_sta
 
 
 @pytest.mark.django_db
-def test_conclusao_bilateral_encerra_anuncio_e_vende_produto(cliente_api, negociacao):
+def test_conclusao_bilateral_encerra_anuncio_e_vende_produto(
+    cliente_api, negociacao, django_capture_on_commit_callbacks
+):
     resposta = solicitar(cliente_api, negociacao)
     assert resposta.status_code == status.HTTP_200_OK
     assert resposta.data["conclusao_solicitada_em"] is not None
     assert resposta.data["prazo_confirmacao_em"] is not None
 
-    resposta = confirmar(cliente_api, negociacao)
+    with django_capture_on_commit_callbacks(execute=True):
+        resposta = confirmar(cliente_api, negociacao)
 
     assert resposta.status_code == status.HTTP_200_OK
     assert resposta.data["status"] == Negociacao.Status.CONCLUIDA
@@ -64,7 +68,7 @@ def test_conclusao_bilateral_encerra_anuncio_e_vende_produto(cliente_api, negoci
         produto_status=Produto.Status.VENDIDO,
     )
     assert negociacao.confirmada_em is not None and negociacao.concluida_em is not None
-    convites = Notificacao.objects.filter(negociacao=negociacao, tipo="avaliacao_disponivel")
+    convites = Notificacao.objects.filter(negociacao=negociacao, tipo=TipoNotificacao.NEGOCIACAO_CONCLUIDA)
     assert set(convites.values_list("usuario_id", flat=True)) == {
         negociacao.oferta.vendedor_id,
         negociacao.oferta.anuncio.comprador_id,

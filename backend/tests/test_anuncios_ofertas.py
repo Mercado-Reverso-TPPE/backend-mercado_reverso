@@ -16,6 +16,7 @@ from quero.ofertas.services import editar_oferta, enviar_oferta, retirar_oferta
     [
         (Anuncio.Status.ATIVO, Anuncio.Status.PAUSADO, True),
         (Anuncio.Status.ATIVO, Anuncio.Status.ENCERRADO, True),
+        (Anuncio.Status.ATIVO, Anuncio.Status.EM_NEGOCIACAO, False),
         (Anuncio.Status.PAUSADO, Anuncio.Status.ATIVO, True),
         (Anuncio.Status.PAUSADO, Anuncio.Status.ENCERRADO, True),
         (Anuncio.Status.ENCERRADO, Anuncio.Status.ATIVO, False),

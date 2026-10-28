@@ -43,6 +43,11 @@ class Negociacao(models.Model):
         on_delete=models.PROTECT,
         related_name="negociacao",
     )
+    anuncio = models.ForeignKey(
+        "anuncios.Anuncio",
+        on_delete=models.PROTECT,
+        related_name="negociacoes",
+    )
     valor_final = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.01)])
     status = models.CharField(
         max_length=14,
@@ -59,6 +64,11 @@ class Negociacao(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(condition=Q(valor_final__gt=0), name="negociacao_valor_final_positivo"),
+            models.UniqueConstraint(
+                fields=("anuncio",),
+                condition=Q(status="em_andamento"),
+                name="uma_negociacao_ativa_por_anuncio",
+            ),
         ]
         indexes = [
             models.Index(fields=("status", "atualizada_em"), name="neg_status_atual_idx"),
@@ -69,4 +79,11 @@ class Negociacao(models.Model):
             status_salvo = Negociacao.objects.filter(pk=self.pk).values_list("status", flat=True).first()
             if status_salvo == self.Status.CONCLUIDA:
                 raise ValidationError("Negociações concluídas são imutáveis.")
+        if self.oferta_id:
+            from quero.ofertas.models import Oferta
+
+            anuncio_id = Oferta.objects.values_list("anuncio_id", flat=True).get(pk=self.oferta_id)
+            if self.anuncio_id is not None and self.anuncio_id != anuncio_id:
+                raise ValidationError({"anuncio": "O anúncio deve ser o mesmo da oferta."})
+            self.anuncio_id = anuncio_id
         super().save(*args, **kwargs)
