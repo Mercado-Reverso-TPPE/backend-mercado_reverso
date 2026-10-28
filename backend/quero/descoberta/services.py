@@ -49,7 +49,16 @@ def anuncios_visiveis(usuario):
     )
 
 
-def buscar_anuncios(*, usuario, termo="", categoria=None, preco_min=None, preco_max=None, distancia_max_km=None, ordenacao=Ordenacao.DISTANCIA):
+def buscar_anuncios(
+    *,
+    usuario,
+    termo="",
+    categoria=None,
+    preco_min=None,
+    preco_max=None,
+    distancia_max_km=None,
+    ordenacao=Ordenacao.DISTANCIA,
+):
     anuncios = anuncios_visiveis(usuario)
     for palavra in termo.split():
         anuncios = anuncios.filter(Q(titulo__icontains=palavra) | Q(descricao__icontains=palavra))

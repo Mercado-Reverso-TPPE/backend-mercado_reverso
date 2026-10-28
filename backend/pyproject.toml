@@ -1,0 +1,29 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle (erros)
+    "W",   # pycodestyle (avisos)
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming (snake_case)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C90", # complexidade ciclomática
+    "RUF", # regras próprias do ruff
+]
+# RUF012: Meta.fields, permission_classes etc. são atributos de classe declarativos do Django/DRF.
+ignore = ["RUF012"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"quero/settings/*.py" = ["F403", "F405"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["quero"]

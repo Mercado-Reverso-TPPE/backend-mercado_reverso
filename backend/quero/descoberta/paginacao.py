@@ -73,7 +73,7 @@ class PaginacaoPorChave:
         # (a, b, c) > (va, vb, vc) em ordem lexicográfica, respeitando a direção de cada campo.
         condicao = Q(pk__in=[])
         iguais = Q()
-        for (campo, decrescente), valor in zip(campos, valores):
+        for (campo, decrescente), valor in zip(campos, valores, strict=False):
             operador = "lt" if decrescente else "gt"
             condicao |= iguais & Q(**{f"{campo}__{operador}": valor})
             iguais &= Q(**{campo: valor})

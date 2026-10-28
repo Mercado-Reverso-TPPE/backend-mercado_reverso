@@ -56,7 +56,9 @@ def test_cadastro_geocodifica_cep_ou_cidade_sem_chamar_servico_externo(
     cliente_api, dados_localizacao, consulta_esperada
 ):
     ponto = Point(-46.6333, -23.5505, srid=4326)
-    with patch("quero.contas.serializers.geocodificar", return_value=(ponto, "01001-000", "São Paulo", "SP")) as geocodificar:
+    with patch(
+        "quero.contas.serializers.geocodificar", return_value=(ponto, "01001-000", "São Paulo", "SP")
+    ) as geocodificar:
         resposta = cliente_api.post(
             "/api/v1/usuarios",
             {
@@ -113,10 +115,10 @@ def test_pedido_de_redefinicao_nao_revela_se_email_existe(cliente_api, usuario, 
 @pytest.mark.parametrize("uso", ["token_valido", "token_alterado", "token_expirado"])
 def test_redefinicao_de_senha_so_aceita_token_valido(usuario, uso):
     from django.contrib.auth.tokens import default_token_generator
-    from django.utils.http import urlsafe_base64_encode
-    from django.utils.encoding import force_bytes
     from django.core.exceptions import ValidationError
     from django.test import override_settings
+    from django.utils.encoding import force_bytes
+    from django.utils.http import urlsafe_base64_encode
 
     uid = urlsafe_base64_encode(force_bytes(usuario.pk))
     token = default_token_generator.make_token(usuario)
@@ -124,10 +126,12 @@ def test_redefinicao_de_senha_so_aceita_token_valido(usuario, uso):
         token = "token-invalido"
     if uso == "token_expirado":
         agora = datetime.now()
-        with override_settings(PASSWORD_RESET_TIMEOUT=1):
-            with patch.object(default_token_generator, "_now", return_value=agora + timedelta(seconds=2)):
-                with pytest.raises(ValidationError):
-                    confirmar_redefinicao_senha(uid=uid, token=token, nova_senha="Nova-senha-forte-456!")
+        with (
+            override_settings(PASSWORD_RESET_TIMEOUT=1),
+            patch.object(default_token_generator, "_now", return_value=agora + timedelta(seconds=2)),
+            pytest.raises(ValidationError),
+        ):
+            confirmar_redefinicao_senha(uid=uid, token=token, nova_senha="Nova-senha-forte-456!")
         return
 
     if uso == "token_valido":

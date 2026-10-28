@@ -96,8 +96,19 @@ O schema de domínio tem no máximo 15 modelos/tabelas próprios, com dados rela
 
 A confirmação automática é aplicada ao consultar negociações e histórico; para que ocorra também sem acesso, agende `python manage.py concluir_negociacoes_expiradas` (por exemplo, a cada 15 minutos via cron).
 
+O modelo físico (diagrama entidade-relacionamento e DDL) está em [`docs_backend/modelo-fisico.md`](docs_backend/modelo-fisico.md) e [`docs_backend/schema.sql`](docs_backend/schema.sql).
+
 ## Testes
 
 Os testes parametrizados ficam em `backend/tests` e usam `pytest-django`. Com os serviços iniciados, execute `docker compose exec backend pytest`. A suíte usa banco PostGIS de teste criado pelo Django; chamadas ao serviço externo de geocodificação são substituídas por respostas simuladas.
+
+## Lint
+
+O lint e a formatação usam o [ruff](https://docs.astral.sh/ruff/), configurado em `backend/pyproject.toml`. O CI falha se houver aviso ou arquivo fora do padrão.
+
+```sh
+docker compose exec backend ruff check .          # lint
+docker compose exec backend ruff format .         # formata o código
+```
 
 Este compose é para desenvolvimento local. Troque as credenciais padrão antes de expor os serviços fora da máquina local.

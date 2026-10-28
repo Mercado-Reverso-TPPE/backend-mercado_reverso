@@ -8,6 +8,7 @@ from django.db.models import Q
 class AcaoModeracao(models.Model):
     class Tipo(models.TextChoices):
         DENUNCIA_CONVERSA = "denuncia_conversa", "Denúncia de conversa"
+        DENUNCIA_AVALIACAO = "denuncia_avaliacao", "Denúncia de avaliação"
         BLOQUEIO_USUARIO = "bloqueio_usuario", "Bloqueio de usuário"
 
     class Estado(models.TextChoices):
@@ -44,6 +45,13 @@ class AcaoModeracao(models.Model):
         blank=True,
         related_name="acoes_moderacao",
     )
+    avaliacao = models.ForeignKey(
+        "reputacao.Avaliacao",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="denuncias",
+    )
     motivo = models.TextField(max_length=2000, blank=True)
     criada_em = models.DateTimeField(auto_now_add=True)
     atualizada_em = models.DateTimeField(auto_now=True)
@@ -56,8 +64,9 @@ class AcaoModeracao(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    Q(tipo="bloqueio_usuario", oferta__isnull=True, evento__isnull=True)
-                    | Q(tipo="denuncia_conversa", oferta__isnull=False)
+                    Q(tipo="bloqueio_usuario", oferta__isnull=True, evento__isnull=True, avaliacao__isnull=True)
+                    | Q(tipo="denuncia_conversa", oferta__isnull=False, avaliacao__isnull=True)
+                    | Q(tipo="denuncia_avaliacao", avaliacao__isnull=False, oferta__isnull=True)
                 ),
                 name="moderacao_alvo_compativel",
             ),
@@ -70,6 +79,11 @@ class AcaoModeracao(models.Model):
                 fields=("autor", "oferta"),
                 condition=Q(tipo="denuncia_conversa", estado="aberta"),
                 name="denuncia_aberta_unica_por_conversa",
+            ),
+            models.UniqueConstraint(
+                fields=("autor", "avaliacao"),
+                condition=Q(tipo="denuncia_avaliacao", estado="aberta"),
+                name="denuncia_avaliacao_aberta_unica",
             ),
         ]
         indexes = [
