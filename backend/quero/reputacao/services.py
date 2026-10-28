@@ -73,6 +73,10 @@ def _tentar_publicar_par(negociacao: Negociacao):
         for av in avaliacoes:
             av.publicada_em = agora
         Avaliacao.objects.bulk_update(avaliacoes, ["publicada_em"])
+        from quero.notificacoes.services import notificar_avaliacao_publicada
+
+        for avaliacao in avaliacoes:
+            notificar_avaliacao_publicada(avaliacao.pk)
 
 
 @transaction.atomic
@@ -91,6 +95,11 @@ def publicar_avaliacoes_vencidas():
     agora = timezone.now()
     ids = list(pendentes.values_list("pk", flat=True))
     count = pendentes.update(publicada_em=agora)
+    if ids:
+        from quero.notificacoes.services import notificar_avaliacao_publicada
+
+        for avaliacao_id in ids:
+            notificar_avaliacao_publicada(avaliacao_id)
     return count, ids
 
 

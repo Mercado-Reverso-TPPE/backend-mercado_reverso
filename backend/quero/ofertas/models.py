@@ -45,7 +45,7 @@ class Oferta(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=("anuncio", "vendedor"),
-                condition=Q(status__in=("enviada", "em_negociacao", "aceita")),
+                condition=Q(status__in=("enviada", "em_negociacao")),
                 name="uma_oferta_ativa_por_vendedor_anuncio",
             ),
         ]
@@ -63,8 +63,10 @@ class EventoNegociacao(models.Model):
         CONTRAPROPOSTA_ACEITA = "contraposta_aceita", "Contraproposta aceita"
         CONTRAPROPOSTA_RECUSADA = "contraposta_recusada", "Contraproposta recusada"
         CONTRAPROPOSTA_EXPIRADA = "contraposta_expirada", "Contraproposta expirada"
+        CONTRAPROPOSTA_SUBSTITUIDA = "contraposta_substituida", "Contraproposta substituída"
         ACEITA = "aceita", "Oferta aceita"
         RECUSADA = "recusada", "Oferta recusada"
+        NEGOCIACAO_CANCELADA = "negociacao_cancelada", "Negociação cancelada"
         MENSAGEM = "mensagem", "Mensagem"
 
     class Resultado(models.TextChoices):

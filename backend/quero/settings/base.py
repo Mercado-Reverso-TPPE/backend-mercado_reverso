@@ -42,6 +42,12 @@ SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(minutes=15), "REFRESH_TOKEN_LIF
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
 RAIO_PADRAO_KM = int(os.getenv("RAIO_PADRAO_KM", "20"))
 RAIO_MAXIMO_KM = int(os.getenv("RAIO_MAXIMO_KM", "200"))
+PESOS_RECOMENDACAO = {
+    "categoria": int(os.getenv("PESO_RECOMENDACAO_CATEGORIA", "40")),
+    "palavras_chave": int(os.getenv("PESO_RECOMENDACAO_PALAVRAS_CHAVE", "25")),
+    "preco": int(os.getenv("PESO_RECOMENDACAO_PRECO", "20")),
+    "distancia": int(os.getenv("PESO_RECOMENDACAO_DISTANCIA", "15")),
+}
 LOGIN_MAX_TENTATIVAS = int(os.getenv("LOGIN_MAX_TENTATIVAS", "5"))
 LOGIN_BLOQUEIO_MINUTOS = int(os.getenv("LOGIN_BLOQUEIO_MINUTOS", "15"))
 GEOCODER_URL = os.getenv("GEOCODER_URL", "https://nominatim.openstreetmap.org")
@@ -62,3 +68,5 @@ MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT") or BASE_DIR / "media")
 PRODUTO_FOTOS_MAXIMO = int(os.getenv("PRODUTO_FOTOS_MAXIMO", "6"))
 PRODUTO_FOTO_TAMANHO_MAXIMO_MB = int(os.getenv("PRODUTO_FOTO_TAMANHO_MAXIMO_MB", "5"))
 PRODUTO_FOTO_FORMATOS = ("JPEG", "PNG", "WEBP")
+CONTRAPROPOSTA_LIMITE_RODADAS = int(os.getenv("CONTRAPROPOSTA_LIMITE_RODADAS", "5"))
+CONTRAPROPOSTA_PRAZO_HORAS = int(os.getenv("CONTRAPROPOSTA_PRAZO_HORAS", "48"))

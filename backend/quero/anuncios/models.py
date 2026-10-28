@@ -33,6 +33,12 @@ class Anuncio(models.Model):
     preco_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     raio_m = models.PositiveIntegerField()
     alcance = gis_models.PolygonField(geography=True, srid=4326, editable=False, null=True)
+    recomendacoes_solicitadas_em = models.DateTimeField(null=True, blank=True)
+    recomendacoes_processando_em = models.DateTimeField(null=True, blank=True)
+    recomendacoes_calculadas_em = models.DateTimeField(null=True, blank=True)
+    recomendacoes_tentar_em = models.DateTimeField(null=True, blank=True)
+    recomendacoes_tentativas = models.PositiveIntegerField(default=0)
+    recomendacoes_ultimo_erro = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ATIVO)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -63,6 +69,7 @@ class Anuncio(models.Model):
                 """,
                 [str(self.pk)],
             )
+        self.refresh_from_db(fields=["alcance"])
 
     def delete(self, *args, **kwargs):
         if self.status == self.Status.ENCERRADO:

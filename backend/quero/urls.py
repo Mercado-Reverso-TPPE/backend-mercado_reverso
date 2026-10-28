@@ -12,9 +12,30 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from quero.anuncios.views import AnuncioViewSet, CategoriaListView
 from quero.catalogo.views import ProdutoViewSet
 from quero.descoberta.views import BuscaSalvaViewSet
+from quero.descoberta.recomendacao_views import (
+    ConvidarVendedorRecomendacaoView,
+    DescartarRecomendacaoView,
+    RecomendacoesAnuncioView,
+)
 from quero.contas.views import CadastroView, ConfirmarAlteracaoEmailView, ConfirmarRedefinicaoSenhaView, PerfilView, SolicitarAlteracaoEmailView, SolicitarRedefinicaoSenhaView
 from quero.contas.serializers import LoginSerializer
-from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
+from quero.negociacao.views_palpites import EstimativaPrecoAnuncioView, PalpiteAnuncioView
+from quero.notificacoes.views import (
+    ContagemNaoLidasView,
+    MarcarNotificacaoLidaView,
+    NotificacoesView,
+    PreferenciasNotificacaoView,
+)
+from quero.ofertas.views import (
+    CancelarNegociacaoView,
+    ContrapropostaView,
+    DecisaoOfertaView,
+    MinhasOfertasView,
+    OfertaDetailView,
+    OfertasDoAnuncioView,
+    RecusarOfertaView,
+    ResponderContrapropostaView,
+)
 from quero.reputacao.views import (
     AvaliacoesDoUsuarioView,
     AvaliacoesNegociacaoView,
@@ -59,8 +80,22 @@ urlpatterns = [
     path("api/v1/perfil/email/confirmar", ConfirmarAlteracaoEmailView.as_view(), name="confirmar-alteracao-email"),
     path("api/v1/categorias", CategoriaListView.as_view(), name="categorias"),
     path("api/v1/anuncios/<uuid:anuncio_id>/ofertas", OfertasDoAnuncioView.as_view(), name="ofertas-do-anuncio"),
+    path("api/v1/anuncios/<uuid:anuncio_id>/palpite", PalpiteAnuncioView.as_view(), name="palpite-anuncio"),
+    path("api/v1/anuncios/<uuid:anuncio_id>/estimativa-preco", EstimativaPrecoAnuncioView.as_view(), name="estimativa-preco-anuncio"),
+    path("api/v1/anuncios/<uuid:anuncio_id>/recomendacoes", RecomendacoesAnuncioView.as_view(), name="recomendacoes-anuncio"),
+    path("api/v1/anuncios/<uuid:anuncio_id>/recomendacoes/<uuid:recomendacao_id>/descartar", DescartarRecomendacaoView.as_view(), name="descartar-recomendacao"),
+    path("api/v1/anuncios/<uuid:anuncio_id>/recomendacoes/<uuid:recomendacao_id>/convidar", ConvidarVendedorRecomendacaoView.as_view(), name="convidar-vendedor-recomendacao"),
     path("api/v1/ofertas/meus", MinhasOfertasView.as_view(), name="minhas-ofertas"),
     path("api/v1/ofertas/<uuid:oferta_id>", OfertaDetailView.as_view(), name="detalhe-oferta"),
+    path("api/v1/ofertas/<uuid:oferta_id>/contrapropostas", ContrapropostaView.as_view(), name="contraproposta-oferta"),
+    path("api/v1/ofertas/<uuid:oferta_id>/contrapropostas/responder", ResponderContrapropostaView.as_view(), name="responder-contraproposta"),
+    path("api/v1/ofertas/<uuid:oferta_id>/aceitar", DecisaoOfertaView.as_view(), name="aceitar-oferta"),
+    path("api/v1/ofertas/<uuid:oferta_id>/recusar", RecusarOfertaView.as_view(), name="recusar-oferta"),
+    path("api/v1/negociacoes/<uuid:negociacao_id>/cancelar", CancelarNegociacaoView.as_view(), name="cancelar-negociacao"),
+    path("api/v1/notificacoes", NotificacoesView.as_view(), name="notificacoes"),
+    path("api/v1/notificacoes/nao-lidas", ContagemNaoLidasView.as_view(), name="notificacoes-nao-lidas"),
+    path("api/v1/notificacoes/<uuid:notificacao_id>/lida", MarcarNotificacaoLidaView.as_view(), name="marcar-notificacao-lida"),
+    path("api/v1/preferencias/notificacoes", PreferenciasNotificacaoView.as_view(), name="preferencias-notificacao"),
     path("api/v1/usuarios/<uuid:avaliado_id>/avaliacoes", AvaliacoesDoUsuarioView.as_view(), name="avaliacoes-do-usuario"),
     path("api/v1/negociacoes/<uuid:negociacao_id>/avaliacoes", AvaliacoesNegociacaoView.as_view(), name="criar-avaliacao"),
     path("api/v1/avaliacoes/<uuid:avaliacao_id>/resposta", RespostaAvaliacaoView.as_view(), name="resposta-avaliacao"),

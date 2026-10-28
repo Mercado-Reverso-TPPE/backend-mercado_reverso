@@ -37,6 +37,7 @@ class Notificacao(models.Model):
         related_name="notificacoes",
     )
     agrupamento = models.CharField(max_length=100, blank=True)
+    contexto = models.JSONField(default=list, blank=True)
     criada_em = models.DateTimeField(auto_now_add=True)
     lida_em = models.DateTimeField(null=True, blank=True)
 
@@ -45,6 +46,42 @@ class Notificacao(models.Model):
         indexes = [
             models.Index(fields=("usuario", "lida_em", "-criada_em"), name="notif_usuario_lida_idx"),
             models.Index(fields=("usuario", "agrupamento"), name="notificacao_agrupamento_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("usuario", "agrupamento"),
+                condition=Q(agrupamento__gt=""),
+                name="notificacao_agrupamento_unico",
+            ),
+        ]
+
+
+class EventoNotificacao(models.Model):
+    """Idempotency ledger for events appended to grouped notifications."""
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="eventos_notificacao",
+    )
+    notificacao = models.ForeignKey(
+        Notificacao,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos",
+    )
+    chave_evento = models.CharField(max_length=180)
+    contexto = models.JSONField(default=dict, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("criada_em", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("usuario", "chave_evento"),
+                name="evento_notificacao_chave_unica",
+            ),
         ]
 
 
