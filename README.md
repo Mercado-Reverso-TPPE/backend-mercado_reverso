@@ -21,6 +21,10 @@ Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.
 - Catálogo de categorias, anúncios de procura, feed por alcance/distância, gerenciamento de status e contagem de ofertas.
 - Envio, consulta, edição e retirada de ofertas; histórico de preços e restrição de visibilidade para impedir que vendedores vejam ofertas concorrentes.
 - Catálogo do vendedor: CRUD de produtos restrito ao proprietário, upload de fotos com limites de quantidade, tamanho e formato (`PRODUTO_FOTOS_MAXIMO`, `PRODUTO_FOTO_TAMANHO_MAXIMO_MB`; JPEG, PNG ou WEBP) e status disponível/reservado/vendido. O produto fica reservado enquanto há negociação em andamento, volta a ficar disponível se ela for cancelada e passa a vendido quando é concluída. Ofertas podem usar um produto disponível do catálogo; nome, descrição, estado, preço e foto de capa são copiados para a oferta, e alterações ou exclusões posteriores do produto não alteram ofertas já enviadas.
+- Chat de negociação: cada oferta é a conversa entre o comprador do anúncio e o vendedor. Mensagens são imutáveis, consultadas por polling (`?apos=<id>`), com contagem e marcação de não lidas. A conversa fica somente leitura quando a oferta é retirada/recusada, o anúncio é encerrado ou a negociação termina.
+- Denúncia de conversa e bloqueio/desbloqueio de usuários. Um bloqueio ativo, em qualquer sentido, impede novas mensagens e novas ofertas entre as duas pessoas, sem apagar o histórico.
+- Conclusão bilateral: o vendedor solicita e o comprador confirma ou recusa dentro de `NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS` (padrão 72 h); vencido o prazo, a conclusão é confirmada automaticamente. Concluir encerra o anúncio, marca o produto ofertado como vendido, torna a negociação imutável e convida as partes a avaliar.
+- Histórico pessoal somente leitura das negociações concluídas e canceladas, com filtros por papel e status.
 
 ## Rotas principais
 
@@ -52,6 +56,19 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | GET / POST | `/buscas-salvas` | Listar / criar buscas salvas próprias |
 | GET / PATCH / PUT / DELETE | `/buscas-salvas/{id}` | Consultar / editar / remover busca salva própria |
 | GET | `/buscas-salvas/{id}/anuncios` | Executar a busca salva (mesma resposta e paginação da busca) |
+| GET | `/conversas` | Listar conversas do usuário, com não lidas e indicador de somente leitura |
+| GET | `/conversas/nao-lidas` | Total de mensagens não lidas |
+| GET / POST | `/conversas/{oferta_id}/mensagens` | Listar (paginado, `?apos=<id>` para polling) / enviar mensagem |
+| POST | `/conversas/{oferta_id}/leitura` | Marcar mensagens recebidas como lidas |
+| POST | `/conversas/{oferta_id}/denuncias` | Denunciar a conversa (`motivo`, `mensagem_id` opcional) |
+| GET / POST | `/bloqueios` | Listar / bloquear usuário (`usuario_id`, `motivo` opcional) |
+| DELETE | `/bloqueios/{usuario_id}` | Desbloquear usuário |
+| GET | `/negociacoes/{id}` | Consultar negociação em que o usuário é parte |
+| POST | `/negociacoes/{id}/conclusao` | Vendedor solicita a conclusão |
+| POST | `/negociacoes/{id}/conclusao/confirmacao` | Comprador confirma a conclusão |
+| POST | `/negociacoes/{id}/conclusao/recusa` | Comprador recusa a conclusão; a negociação continua em andamento |
+| GET | `/historico` | Negociações concluídas/canceladas (`?papel=comprador\|vendedor`, `?status=concluida\|cancelada`) |
+| GET | `/historico/{id}` | Detalhe com valores negociados e mensagens |
 
 ### Busca de anúncios
 
@@ -77,7 +94,9 @@ As regras de negócio ficam em `services.py`; os modelos representam os dados, s
 
 O schema de domínio tem no máximo 15 modelos/tabelas próprios, com dados relacionais normalizados; tabelas internas do Django e tabelas auxiliares do PostgreSQL/PostGIS não entram nessa contagem. Localização de referência é atributo 1:1 do usuário, eventos de negociação reúnem histórico de preço, contrapropostas e mensagens, e o alcance geográfico é materializado apenas para indexação GiST.
 
-O modelo físico (diagrama entidade-relacionamento e DDL) está em [`docs/modelo-fisico.md`](docs/modelo-fisico.md) e [`docs/schema.sql`](docs/schema.sql).
+A confirmação automática é aplicada ao consultar negociações e histórico; para que ocorra também sem acesso, agende `python manage.py concluir_negociacoes_expiradas` (por exemplo, a cada 15 minutos via cron).
+
+O modelo físico (diagrama entidade-relacionamento e DDL) está em [`docs_backend/modelo-fisico.md`](docs_backend/modelo-fisico.md) e [`docs_backend/schema.sql`](docs_backend/schema.sql).
 
 ## Testes
 

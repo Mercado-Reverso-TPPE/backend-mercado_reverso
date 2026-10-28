@@ -17,7 +17,7 @@ class OfertaSerializer(serializers.ModelSerializer):
     anuncio_id = serializers.UUIDField(read_only=True)
     vendedor_id = serializers.UUIDField(read_only=True)
     vendedor_nome = serializers.CharField(source="vendedor.nome", read_only=True)
-    historico = EventoNegociacaoSerializer(source="eventos", many=True, read_only=True)
+    historico = serializers.SerializerMethodField()
     preco = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"), required=False)
     produto_id = serializers.UUIDField(required=False)
     produto_nome = serializers.CharField(source="nome_produto_snapshot", read_only=True)
@@ -61,6 +61,11 @@ class OfertaSerializer(serializers.ModelSerializer):
         url = default_storage.url(obj.foto_produto_snapshot)
         request = self.context.get("request")
         return request.build_absolute_uri(url) if request else url
+
+    def get_historico(self, obj):
+        # Mensagens do chat têm endpoint próprio e não fazem parte do histórico de preços.
+        eventos = [e for e in obj.eventos.all() if e.tipo_evento != EventoNegociacao.TipoEvento.MENSAGEM]
+        return EventoNegociacaoSerializer(eventos, many=True).data
 
     def validate(self, attrs):
         if self.instance is not None and "produto_id" in attrs:

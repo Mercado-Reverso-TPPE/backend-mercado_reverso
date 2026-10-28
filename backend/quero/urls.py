@@ -21,6 +21,19 @@ from quero.contas.views import (
     SolicitarRedefinicaoSenhaView,
 )
 from quero.descoberta.views import BuscaSalvaViewSet
+from quero.moderacao.views import BloqueioDetailView, BloqueiosView, DenunciasConversaView
+from quero.negociacao.views import (
+    ConfirmarConclusaoView,
+    ConversasView,
+    HistoricoDetailView,
+    HistoricoView,
+    LeituraConversaView,
+    MensagensNaoLidasView,
+    MensagensView,
+    NegociacaoDetailView,
+    RecusarConclusaoView,
+    SolicitarConclusaoView,
+)
 from quero.ofertas.views import MinhasOfertasView, OfertaDetailView, OfertasDoAnuncioView
 from quero.reputacao.views import (
     AvaliacoesDoUsuarioView,
@@ -70,6 +83,31 @@ urlpatterns = [
     path("api/v1/anuncios/<uuid:anuncio_id>/ofertas", OfertasDoAnuncioView.as_view(), name="ofertas-do-anuncio"),
     path("api/v1/ofertas/meus", MinhasOfertasView.as_view(), name="minhas-ofertas"),
     path("api/v1/ofertas/<uuid:oferta_id>", OfertaDetailView.as_view(), name="detalhe-oferta"),
+    path("api/v1/conversas", ConversasView.as_view(), name="conversas"),
+    path("api/v1/conversas/nao-lidas", MensagensNaoLidasView.as_view(), name="mensagens-nao-lidas"),
+    path("api/v1/conversas/<uuid:oferta_id>/mensagens", MensagensView.as_view(), name="mensagens"),
+    path("api/v1/conversas/<uuid:oferta_id>/leitura", LeituraConversaView.as_view(), name="leitura-conversa"),
+    path("api/v1/conversas/<uuid:oferta_id>/denuncias", DenunciasConversaView.as_view(), name="denuncias-conversa"),
+    path("api/v1/bloqueios", BloqueiosView.as_view(), name="bloqueios"),
+    path("api/v1/bloqueios/<uuid:usuario_id>", BloqueioDetailView.as_view(), name="desbloqueio"),
+    path("api/v1/negociacoes/<uuid:negociacao_id>", NegociacaoDetailView.as_view(), name="negociacao"),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/conclusao",
+        SolicitarConclusaoView.as_view(),
+        name="solicitar-conclusao",
+    ),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/conclusao/confirmacao",
+        ConfirmarConclusaoView.as_view(),
+        name="confirmar-conclusao",
+    ),
+    path(
+        "api/v1/negociacoes/<uuid:negociacao_id>/conclusao/recusa",
+        RecusarConclusaoView.as_view(),
+        name="recusar-conclusao",
+    ),
+    path("api/v1/historico", HistoricoView.as_view(), name="historico"),
+    path("api/v1/historico/<uuid:negociacao_id>", HistoricoDetailView.as_view(), name="historico-detalhe"),
     path(
         "api/v1/usuarios/<uuid:avaliado_id>/avaliacoes", AvaliacoesDoUsuarioView.as_view(), name="avaliacoes-do-usuario"
     ),

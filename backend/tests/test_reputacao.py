@@ -102,8 +102,11 @@ def negociacao_concluida(db, comprador, vendedor, categoria):
 
 @pytest.fixture
 def negociacao_em_andamento(negociacao_concluida):
-    negociacao_concluida.status = Negociacao.Status.EM_ANDAMENTO
-    negociacao_concluida.save(update_fields=["status"])
+    # Negociacao.save bloqueia alterações em concluídas; update() contorna só no preparo do teste.
+    Negociacao.objects.filter(pk=negociacao_concluida.pk).update(
+        status=Negociacao.Status.EM_ANDAMENTO, concluida_em=None
+    )
+    negociacao_concluida.refresh_from_db()
     return negociacao_concluida
 
 

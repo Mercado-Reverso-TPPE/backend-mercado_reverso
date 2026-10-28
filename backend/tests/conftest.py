@@ -64,3 +64,63 @@ def anuncio(categoria, usuario_com_localizacao):
         descricao="Notebook para estudo",
         raio_m=20_000,
     )
+
+
+@pytest.fixture
+def vendedor_no_raio(vendedor, anuncio):
+    vendedor.ponto = anuncio.comprador.ponto
+    vendedor.save(update_fields=["ponto"])
+    return vendedor
+
+
+@pytest.fixture
+def terceiro(db):
+    return Usuario.objects.create_user(
+        email="terceiro@example.com",
+        password="Senha-forte-123!",
+        nome="Terceiro de Teste",
+    )
+
+
+@pytest.fixture
+def oferta(anuncio, vendedor_no_raio):
+    from quero.ofertas.models import Oferta
+    from quero.ofertas.services import enviar_oferta
+
+    return enviar_oferta(
+        vendedor=vendedor_no_raio,
+        anuncio_id=anuncio.pk,
+        dados={
+            "descricao": "Notebook revisado",
+            "estado_conservacao": Oferta.EstadoConservacao.SEMINOVO,
+            "preco": "1500.00",
+        },
+    )
+
+
+@pytest.fixture
+def produto(categoria, vendedor):
+    from quero.catalogo.models import Produto
+
+    return Produto.objects.create(
+        vendedor=vendedor,
+        categoria=categoria,
+        nome="Notebook",
+        descricao="Notebook revisado",
+        estado_conservacao=Produto.EstadoConservacao.SEMINOVO,
+        preco="1500.00",
+    )
+
+
+@pytest.fixture
+def negociacao(oferta, produto):
+    """Estado produzido pelo aceite de uma oferta (QRO-13): anúncio em negociação e produto reservado."""
+    from quero.negociacao.models import Negociacao
+    from quero.ofertas.models import Oferta
+
+    oferta.status = Oferta.Status.ACEITA
+    oferta.produto = produto
+    oferta.save(update_fields=["status", "produto"])
+    oferta.anuncio.status = Anuncio.Status.EM_NEGOCIACAO
+    oferta.anuncio.save(update_fields=["status"])
+    return Negociacao.objects.create(oferta=oferta, valor_final="1400.00")
