@@ -32,7 +32,7 @@ Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.
 - Cadastro, login JWT, renovação e encerramento de sessão; bloqueio temporário após falhas consecutivas configurável.
 - Recuperação de senha por e-mail, com token de uso único e prazo configurável.
 - Consulta e atualização do perfil/localização; troca de e-mail mediante confirmação. Atualizar a localização recalcula o centro geográfico dos anúncios ativos e pausados.
-- Geocodificação de CEP/cidade para coordenadas, com cache configurável (em memória no desenvolvimento e Redis compartilhado em produção). O serviço padrão é o Nominatim público do OpenStreetMap, configurável por `GEOCODER_URL` e `GEOCODER_USER_AGENT`.
+- Localização por CEP ou cidade resolvida no PostGIS: a tabela `Municipio` traz os 5.571 municípios do IBGE com o ponto da sede (carregada pela migration `core.0002`, dados em `quero/core/dados/`; fica no app `core` como dado de referência, fora dos 16 modelos do domínio). Cidade e UF não dependem de serviço externo; o CEP é traduzido em município pelo ViaCEP (`CEP_SERVICO_URL`, cache de 30 dias). A precisão é a da sede do município.
 - Catálogo de categorias, anúncios de procura, feed por alcance/distância, gerenciamento de status e contagem de ofertas.
 - Envio, consulta, edição, retirada, decisão e contrapropostas de ofertas; histórico de preços e restrição de visibilidade para impedir que vendedores vejam ofertas concorrentes.
 - Palpites anônimos de preço por anúncio: vendedores no raio podem criar ou substituir o próprio palpite; o comprador só recebe mínimo, média e máximo após três vendedores distintos.
