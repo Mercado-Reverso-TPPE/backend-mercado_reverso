@@ -173,3 +173,20 @@ def denunciar_avaliacao(*, denunciante, avaliacao_id, motivo=""):
         motivo=motivo,
     )
     return acao
+
+
+def resumo_publico(usuario):
+    """O que qualquer pessoa logada pode ver de outra: nome, foto e reputação publicada."""
+    from django.db.models import Avg, Count
+
+    reputacao = Avaliacao.objects.filter(avaliado=usuario, publicada_em__isnull=False).aggregate(
+        nota=Avg("nota"), avaliacoes=Count("id")
+    )
+    nota = reputacao["nota"]
+    return {
+        "id": str(usuario.pk),
+        "nome": usuario.nome,
+        "foto": usuario.foto or None,
+        "nota": f"{nota:.1f}" if nota is not None else None,
+        "avaliacoes": reputacao["avaliacoes"],
+    }

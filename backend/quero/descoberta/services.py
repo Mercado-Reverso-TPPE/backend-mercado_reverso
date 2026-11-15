@@ -108,3 +108,89 @@ def salvar_busca(*, usuario, dados, busca=None):
     except IntegrityError as exc:
         raise ValidationError({"nome": "Você já tem uma busca salva com este nome."}) from exc
     return busca
+
+
+# ── Vitrine (produtos à venda no feed) ───────────────────────────────────────
+
+
+def produtos_visiveis(usuario, distancia_max_km=None):
+    """Produtos disponíveis de outros vendedores dentro do alcance de quem busca, com a distância em metros.
+
+    Produto não tem raio próprio: o alcance é a distância máxima pedida ou, sem ela, ``RAIO_PADRAO_KM``.
+    """
+    from django.conf import settings
+
+    from quero.catalogo.models import Produto
+
+    if usuario.ponto is None:
+        return Produto.objects.annotate(
+            distancia_m=Value(None, output_field=FloatField()),
+            orcamento_ordem=F("preco"),
+        ).none()
+    alcance_m = (distancia_max_km or settings.RAIO_PADRAO_KM) * 1000
+    return (
+        Produto.objects.filter(
+            status=Produto.Status.DISPONIVEL,
+            vendedor__ponto__isnull=False,
+            vendedor__ponto__dwithin=(usuario.ponto, alcance_m),
+        )
+        .exclude(vendedor=usuario)
+        .select_related("vendedor", "categoria")
+        .prefetch_related("fotos")
+        .annotate(
+            distancia_m=Cast(Distance("vendedor__ponto", usuario.ponto), FloatField()),
+            # Mesmo nome do campo de preço dos anúncios, para reaproveitar ORDENACOES e a paginação.
+            orcamento_ordem=F("preco"),
+        )
+    )
+
+
+def buscar_produtos(
+    *,
+    usuario,
+    termo="",
+    categoria=None,
+    preco_min=None,
+    preco_max=None,
+    distancia_max_km=None,
+    ordenacao=Ordenacao.DISTANCIA,
+):
+    produtos = produtos_visiveis(usuario, distancia_max_km)
+    for palavra in termo.split():
+        produtos = produtos.filter(Q(nome__icontains=palavra) | Q(descricao__icontains=palavra))
+    if categoria is not None:
+        produtos = produtos.filter(categoria=categoria)
+    if preco_min is not None:
+        produtos = produtos.filter(preco__gte=preco_min)
+    if preco_max is not None:
+        produtos = produtos.filter(preco__lte=preco_max)
+    return produtos.order_by(*(f"-{campo}" if decrescente else campo for campo, decrescente in ORDENACOES[ordenacao]))
+
+
+def contar_por_categoria(queryset):
+    """``[{slug, total}]`` de um resultado de busca, sem a ordenação (que quebraria o agrupamento)."""
+    return list(
+        queryset.order_by()
+        .values(slug=F("categoria__slug"))
+        .annotate(total=Count("id", distinct=True))
+        .order_by("slug")
+    )
+
+
+def estatisticas_publicas():
+    """Números do hero: anúncios ativos, cidades com atividade e pessoas que vendem."""
+    from quero.catalogo.models import Produto
+    from quero.contas.models import Usuario
+    from quero.ofertas.models import Oferta
+
+    ativos = Anuncio.objects.filter(status=Anuncio.Status.ATIVO)
+    com_atividade = Usuario.objects.filter(
+        Q(anuncios__status=Anuncio.Status.ATIVO) | Q(produtos__status=Produto.Status.DISPONIVEL)
+    ).exclude(cidade="")
+    cidades = com_atividade.values("cidade", "uf").distinct().count()
+    vendedores = (
+        Usuario.objects.filter(Q(produtos__isnull=False) | Q(pk__in=Oferta.objects.values("vendedor_id")))
+        .distinct()
+        .count()
+    )
+    return {"anuncios_ativos": ativos.count(), "cidades": cidades, "vendedores": vendedores}

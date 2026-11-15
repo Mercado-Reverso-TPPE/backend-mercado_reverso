@@ -2,14 +2,30 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.generics import ListAPIView
 from rest_framework.pagination import CursorPagination
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from quero.anuncios.views import AnuncioSerializer
 from quero.ofertas.models import BuscaSalva
 
 from .paginacao import PaginacaoPorChave
-from .services import buscar_anuncios, filtros_da_busca_salva, salvar_busca
-from .views import BuscaSalvaSerializer
+from .services import (
+    buscar_anuncios,
+    buscar_produtos,
+    contar_por_categoria,
+    estatisticas_publicas,
+    filtros_da_busca_salva,
+    salvar_busca,
+)
+from .views import (
+    BuscaSalvaSerializer,
+    ContagemPorCategoriaSerializer,
+    FiltrosBuscaSerializer,
+    FiltrosContagemSerializer,
+    ProdutoDaVitrineSerializer,
+)
 
 
 class BuscaSalvaPagination(CursorPagination):
@@ -45,3 +61,53 @@ class BuscaSalvaViewSet(viewsets.ModelViewSet):
         anuncios = buscar_anuncios(usuario=request.user, **filtros_da_busca_salva(busca))
         pagina = paginador.paginar(anuncios, request, busca.ordenacao)
         return paginador.resposta(AnuncioSerializer(pagina, many=True, context={"request": request}).data)
+
+
+class VitrineView(ListAPIView):
+    """GET /api/v1/vitrine — produtos à venda perto de quem busca, com os mesmos filtros do feed."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProdutoDaVitrineSerializer
+
+    def list(self, request, *args, **kwargs):
+        filtros = FiltrosBuscaSerializer(data=request.query_params)
+        filtros.is_valid(raise_exception=True)
+        paginador = PaginacaoPorChave()
+        pagina = paginador.paginar(
+            buscar_produtos(usuario=request.user, **filtros.filtros()),
+            request,
+            filtros.validated_data["ordenacao"],
+        )
+        return paginador.resposta(self.get_serializer(pagina, many=True).data)
+
+
+class _ContagemPorCategoriaView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    buscar = None
+
+    def get(self, request):
+        filtros = FiltrosContagemSerializer(data=request.query_params)
+        filtros.is_valid(raise_exception=True)
+        contagem = contar_por_categoria(type(self).buscar(usuario=request.user, **filtros.filtros()))
+        return Response(ContagemPorCategoriaSerializer(contagem, many=True).data)
+
+
+class ContagemAnunciosPorCategoriaView(_ContagemPorCategoriaView):
+    """GET /api/v1/anuncios/categorias — ``[{slug, total}]`` dos anúncios visíveis com os filtros do feed."""
+
+    buscar = staticmethod(buscar_anuncios)
+
+
+class ContagemVitrinePorCategoriaView(_ContagemPorCategoriaView):
+    """GET /api/v1/vitrine/categorias — ``[{slug, total}]`` dos produtos visíveis com os filtros do feed."""
+
+    buscar = staticmethod(buscar_produtos)
+
+
+class EstatisticasView(APIView):
+    """GET /api/v1/estatisticas — números públicos do hero."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response(estatisticas_publicas())
