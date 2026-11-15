@@ -28,6 +28,7 @@ class AnuncioSerializer(serializers.ModelSerializer):
     ofertas_recebidas = serializers.IntegerField(source="ofertas_ativas", read_only=True, default=0)
     cidade = serializers.CharField(source="comprador.cidade", read_only=True)
     uf = serializers.CharField(source="comprador.uf", read_only=True)
+    comprador_publico = serializers.SerializerMethodField()
 
     class Meta:
         model = Anuncio
@@ -46,10 +47,16 @@ class AnuncioSerializer(serializers.ModelSerializer):
             "ofertas_recebidas",
             "cidade",
             "uf",
+            "comprador_publico",
             "criado_em",
             "atualizado_em",
         )
         read_only_fields = ("id", "comprador", "status", "cidade", "uf", "criado_em", "atualizado_em")
+
+    def get_comprador_publico(self, obj):
+        from quero.reputacao.services import resumo_publico
+
+        return resumo_publico(obj.comprador)
 
     def get_distancia_km(self, obj):
         distancia = getattr(obj, "distancia_m", None)

@@ -20,7 +20,13 @@ from quero.contas.controllers import (
     SolicitarRedefinicaoSenhaView,
 )
 from quero.contas.views import LoginSerializer
-from quero.descoberta.controllers import BuscaSalvaViewSet
+from quero.descoberta.controllers import (
+    BuscaSalvaViewSet,
+    ContagemAnunciosPorCategoriaView,
+    ContagemVitrinePorCategoriaView,
+    EstatisticasView,
+    VitrineView,
+)
 from quero.descoberta.recomendacao_controllers import (
     ConvidarVendedorRecomendacaoView,
     DescartarRecomendacaoView,
@@ -101,6 +107,11 @@ urlpatterns = [
     path("api/v1/perfil/email", SolicitarAlteracaoEmailView.as_view(), name="solicitar-alteracao-email"),
     path("api/v1/perfil/email/confirmar", ConfirmarAlteracaoEmailView.as_view(), name="confirmar-alteracao-email"),
     path("api/v1/categorias", CategoriaListView.as_view(), name="categorias"),
+    # Antes do router, para "categorias" não ser lido como o id de um anúncio.
+    path("api/v1/anuncios/categorias", ContagemAnunciosPorCategoriaView.as_view(), name="anuncios-por-categoria"),
+    path("api/v1/vitrine", VitrineView.as_view(), name="vitrine"),
+    path("api/v1/vitrine/categorias", ContagemVitrinePorCategoriaView.as_view(), name="vitrine-por-categoria"),
+    path("api/v1/estatisticas", EstatisticasView.as_view(), name="estatisticas"),
     path("api/v1/anuncios/<uuid:anuncio_id>/ofertas", OfertasDoAnuncioView.as_view(), name="ofertas-do-anuncio"),
     path("api/v1/anuncios/<uuid:anuncio_id>/palpite", PalpiteAnuncioView.as_view(), name="palpite-anuncio"),
     path(

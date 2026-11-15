@@ -8,6 +8,7 @@ class AvaliacaoSerializer(serializers.ModelSerializer):
 
     autor_id = serializers.UUIDField(read_only=True)
     avaliado_id = serializers.UUIDField(read_only=True)
+    autor_nome = serializers.CharField(source="autor.nome", read_only=True)
 
     class Meta:
         model = Avaliacao
@@ -15,6 +16,7 @@ class AvaliacaoSerializer(serializers.ModelSerializer):
             "id",
             "negociacao_id",
             "autor_id",
+            "autor_nome",
             "avaliado_id",
             "nota",
             "comentario",
