@@ -1,99 +1,92 @@
-import hashlib
+"""
+Localização de referência a partir de CEP ou cidade.
+
+As coordenadas vêm da tabela ``Municipio`` (PostGIS), carregada com os
+municípios do IBGE e o ponto da sede de cada um: cidade e UF são resolvidas
+no próprio banco, sem serviço externo.
+
+O CEP precisa ser traduzido para um município, e não existe base pública de
+CEP com coordenadas. Por isso só essa etapa consulta o ViaCEP
+(``CEP_SERVICO_URL``), que devolve o código IBGE do município; o ponto sai da
+tabela local. As respostas do ViaCEP ficam em cache por 30 dias.
+
+A precisão é a da sede do município: suficiente para o raio dos anúncios,
+que é medido em quilômetros.
+"""
+
 import json
-import time
+import re
 from urllib.error import URLError
-from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.conf import settings
-from django.contrib.gis.geos import Point
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 
+from quero.core.models import Municipio, normalizar_nome
 
-def _chave_localizacao(*, cep, cidade, uf):
-    endereco = "|".join((cep.strip().casefold(), cidade.strip().casefold(), uf.strip().casefold()))
-    return hashlib.sha256(endereco.encode("utf-8")).hexdigest()
-
-
-def _parametros_busca(*, cep, cidade, uf):
-    parametros = {"format": "jsonv2", "limit": 1, "country": "Brazil", "countrycodes": "br"}
-    if cep:
-        parametros["postalcode"] = cep
-    else:
-        parametros["q"] = ", ".join(parte for parte in (cidade, uf, "Brasil") if parte)
-    return parametros
+CACHE_CEP_SEGUNDOS = 30 * 24 * 60 * 60
 
 
-def _buscar_no_nominatim(*, cep, cidade, uf):
-    url_base = settings.GEOCODER_URL.rstrip("/")
-    url = f"{url_base}/search?{urlencode(_parametros_busca(cep=cep, cidade=cidade, uf=uf))}"
+def _so_digitos(cep):
+    return re.sub(r"\D", "", cep or "")
+
+
+def _formatar_cep(digitos):
+    return f"{digitos[:5]}-{digitos[5:]}"
+
+
+def _consultar_cep(digitos):
+    """Código IBGE do município do CEP, ou ``None`` quando o CEP não existe."""
+    chave = f"cep:v1:{digitos}"
+    em_cache = cache.get(chave)
+    if em_cache is not None:
+        return em_cache or None
+
+    url = f"{settings.CEP_SERVICO_URL.rstrip('/')}/{digitos}/json/"
     request = Request(url, headers={"User-Agent": settings.GEOCODER_USER_AGENT, "Accept": "application/json"})
     try:
         with urlopen(request, timeout=5) as response:
-            resultados = json.loads(response.read().decode("utf-8"))
+            dados = json.loads(response.read().decode("utf-8"))
     except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise ValidationError("O serviço de localização está indisponível. Tente novamente.") from exc
+        raise ValidationError("O serviço de CEP está indisponível. Tente novamente ou informe a cidade.") from exc
 
-    if not resultados:
-        raise ValidationError("Não foi possível localizar o CEP ou a cidade informada.")
+    codigo = None if dados.get("erro") else str(dados.get("ibge") or "")
+    # Guarda também a ausência ("") para não repetir a consulta de um CEP inexistente.
+    cache.set(chave, codigo or "", timeout=CACHE_CEP_SEGUNDOS)
+    return codigo or None
 
-    resultado = resultados[0]
-    endereco = resultado.get("address", {})
-    codigo_uf = endereco.get("ISO3166-2-lvl4", "").removeprefix("BR-")
-    cidade_encontrada = (
-        cidade
-        or endereco.get("city")
-        or endereco.get("town")
-        or endereco.get("village")
-        or endereco.get("municipality")
-        or ""
-    ).strip()
-    uf_encontrada = (uf or codigo_uf).upper()
-    cep_encontrado = (cep or endereco.get("postcode", "")).strip()
-    ponto = Point(float(resultado["lon"]), float(resultado["lat"]), srid=4326)
-    return ponto, cep_encontrado, cidade_encontrada, uf_encontrada
+
+def municipio_da_cidade(cidade, uf=""):
+    """O município com esse nome (sem diferenciar acento nem maiúsculas), na UF quando informada."""
+    municipios = Municipio.objects.filter(nome_busca=normalizar_nome(cidade))
+    if uf:
+        municipios = municipios.filter(uf=uf.upper())
+    encontrados = list(municipios[:2])
+    if not encontrados:
+        local = f"{cidade.strip()}/{uf.upper()}" if uf else cidade.strip()
+        raise ValidationError(f"Não encontramos a cidade {local}. Confira o nome e o estado.")
+    if len(encontrados) > 1:
+        raise ValidationError("Há mais de uma cidade com esse nome. Informe o estado.")
+    return encontrados[0]
 
 
 def localizar(*, cep="", cidade="", uf=""):
-    cep, cidade, uf = cep.strip(), cidade.strip(), uf.strip().upper()
-    if not cep and not cidade:
+    """Devolve ``(ponto, cep, cidade, uf)`` a partir do CEP ou, sem ele, da cidade."""
+    digitos, cidade, uf = _so_digitos(cep), cidade.strip(), uf.strip().upper()
+    if not digitos and not cidade:
         raise ValidationError("Informe um CEP ou uma cidade para localizar o endereço.")
+    if digitos and len(digitos) != 8:
+        raise ValidationError("O CEP precisa ter 8 dígitos.")
 
-    chave = _chave_localizacao(cep=cep, cidade=cidade, uf=uf)
-    chave_cache = f"geocodificacao:v1:{chave}"
-    resultado_cache = cache.get(chave_cache)
-    if resultado_cache:
-        return (
-            Point(resultado_cache["longitude"], resultado_cache["latitude"], srid=4326),
-            resultado_cache["cep"],
-            resultado_cache["cidade"],
-            resultado_cache["uf"],
-        )
+    if digitos:
+        codigo = _consultar_cep(digitos)
+        municipio = Municipio.objects.filter(pk=codigo).first() if codigo else None
+        if municipio is None:
+            raise ValidationError("Não encontramos esse CEP. Confira os números ou informe só a cidade.")
+        if uf and uf != municipio.uf:
+            raise ValidationError(f"Esse CEP é de {municipio.nome}/{municipio.uf}, não de {uf}.")
+        return municipio.ponto, _formatar_cep(digitos), municipio.nome, municipio.uf
 
-    limite_cache = "geocodificador:nominatim:intervalo"
-    while not cache.add(limite_cache, True, timeout=1):
-        time.sleep(0.05)
-
-    resultado_cache = cache.get(chave_cache)
-    if resultado_cache:
-        return (
-            Point(resultado_cache["longitude"], resultado_cache["latitude"], srid=4326),
-            resultado_cache["cep"],
-            resultado_cache["cidade"],
-            resultado_cache["uf"],
-        )
-
-    try:
-        ponto, cep, cidade, uf = _buscar_no_nominatim(cep=cep, cidade=cidade, uf=uf)
-    except ValidationError:
-        raise
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValidationError("O serviço de localização retornou uma resposta inválida.") from exc
-
-    cache.set(
-        chave_cache,
-        {"longitude": ponto.x, "latitude": ponto.y, "cep": cep, "cidade": cidade, "uf": uf},
-        timeout=30 * 24 * 60 * 60,
-    )
-    return ponto, cep, cidade, uf
+    municipio = municipio_da_cidade(cidade, uf)
+    return municipio.ponto, "", municipio.nome, municipio.uf

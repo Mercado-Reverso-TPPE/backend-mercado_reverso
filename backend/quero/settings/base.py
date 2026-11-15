@@ -120,7 +120,8 @@ RECOMENDACOES_MAXIMO_TENTATIVAS = int(os.getenv("RECOMENDACOES_MAXIMO_TENTATIVAS
 NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS = int(os.getenv("NEGOCIACAO_PRAZO_CONFIRMACAO_HORAS", "72"))
 LOGIN_MAX_TENTATIVAS = int(os.getenv("LOGIN_MAX_TENTATIVAS", "5"))
 LOGIN_BLOQUEIO_MINUTOS = int(os.getenv("LOGIN_BLOQUEIO_MINUTOS", "15"))
-GEOCODER_URL = os.getenv("GEOCODER_URL", "https://nominatim.openstreetmap.org")
+# Só traduz CEP em município (código IBGE); as coordenadas vêm da tabela Municipio.
+CEP_SERVICO_URL = os.getenv("CEP_SERVICO_URL", "https://viacep.com.br/ws")
 GEOCODER_USER_AGENT = os.getenv("GEOCODER_USER_AGENT", "Quero/1.0 (geocodificacao de cadastro)")
 PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "3600"))
 PASSWORD_RESET_URL = os.getenv("PASSWORD_RESET_URL", "http://localhost:3000/redefinir-senha")
