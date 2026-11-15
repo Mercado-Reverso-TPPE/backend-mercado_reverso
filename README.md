@@ -10,6 +10,21 @@ API REST do marketplace Quero., organizada em MVC com camadas. Este repositório
 
 No pgAdmin, conecte ao host `db`, porta `5432`, banco e usuário configurados no `.env`.
 
+### Dados de homologação
+
+Para testar com dados realistas, popule o banco depois de subir os containers:
+
+```bash
+docker exec quero-backend python manage.py popular_banco
+```
+
+O comando cria cerca de 30 pessoas fictícias em bairros reais de São Paulo, Campinas, Rio de Janeiro, Belo Horizonte, Curitiba, Brasília, Porto Alegre, Recife e Salvador, com pedidos de compra, produtos à venda com preços de mercado, ofertas, contrapropostas, conversas, negociações concluídas e avaliações publicadas. Tudo passa pelos serviços do domínio, então notificações, histórico e reputação seguem as regras do backend.
+
+- Conta de teste: `voce@example.com` / `quero-homologacao-2026` (Pinheiros, São Paulo), com ofertas recebidas, ofertas enviadas e uma venda em andamento.
+- As demais contas (`mariana@example.com`, `bruno@example.com`…) usam a mesma senha.
+- O comando só acrescenta dados e não mexe nas contas que já existem. Rodar de novo é recusado; `--recriar` apaga **todo** o banco, inclusive contas criadas à mão, e popula de novo.
+- Só roda com `DEBUG` ligado.
+
 Para uma plataforma com proxy HTTPS, use `DJANGO_SETTINGS_MODULE=quero.settings.prod` e configure `SECRET_KEY`, `REDIS_URL`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` e `CSRF_TRUSTED_ORIGINS`. O cache compartilhado é usado para controle de tentativas de login e cache/limitação de geocodificação. SMTP, geocodificador e URLs de confirmação/reset também são configuráveis pelo ambiente; consulte `.env.example`.
 
 ## Release 1 — backend
@@ -109,6 +124,17 @@ Um convite gera uma notificação para o vendedor e atualiza o estado persistido
 | POST | `/negociacoes/{id}/conclusao/recusa` | Comprador recusa a conclusão; a negociação continua em andamento |
 | GET | `/historico` | Negociações concluídas/canceladas (`?papel=comprador\|vendedor`, `?status=concluida\|cancelada`) |
 | GET | `/historico/{id}` | Detalhe com valores negociados e mensagens |
+
+### Vitrine, contagens e estatísticas
+
+| Método | Rota | Uso |
+| --- | --- | --- |
+| GET | `/vitrine` | Produtos disponíveis de outros vendedores perto de quem busca. Aceita os mesmos filtros e ordenações de `/anuncios` e pagina por cursor. O alcance é `distancia_max_km` ou, sem ele, `RAIO_PADRAO_KM`. Cada item traz foto principal, distância e `vendedor_publico` (nome, foto, nota e número de avaliações publicadas). |
+| GET | `/anuncios/categorias` | `[{slug, total}]` dos anúncios visíveis com os filtros do feed, ignorando a categoria |
+| GET | `/vitrine/categorias` | `[{slug, total}]` dos produtos da vitrine com os filtros do feed, ignorando a categoria |
+| GET | `/estatisticas` | Pública: `{anuncios_ativos, cidades, vendedores}` para o hero |
+
+`GET /anuncios` também passa a trazer `comprador_publico`, e as avaliações de `/usuarios/:id/avaliacoes` trazem `autor_nome`.
 
 ### Busca de anúncios
 

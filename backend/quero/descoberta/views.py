@@ -105,3 +105,57 @@ class RecomendacaoSerializer(serializers.ModelSerializer):
             "calculada_em",
         )
         read_only_fields = fields
+
+
+class ProdutoDaVitrineSerializer(serializers.Serializer):
+    """Produto à venda no feed: dados do catálogo, foto principal, distância e o vendedor."""
+
+    id = serializers.UUIDField()
+    nome = serializers.CharField()
+    descricao = serializers.CharField()
+    categoria = serializers.CharField(source="categoria.slug")
+    categoria_nome = serializers.CharField(source="categoria.nome")
+    preco = serializers.DecimalField(max_digits=10, decimal_places=2)
+    estado_conservacao = serializers.CharField()
+    foto = serializers.SerializerMethodField()
+    cidade = serializers.CharField(source="vendedor.cidade")
+    uf = serializers.CharField(source="vendedor.uf")
+    distancia_km = serializers.SerializerMethodField()
+    visualizacoes = serializers.SerializerMethodField()
+    criado_em = serializers.DateTimeField()
+    vendedor_publico = serializers.SerializerMethodField()
+
+    def get_foto(self, obj):
+        primeira = next(iter(obj.fotos.all()), None)
+        if primeira is None:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(primeira.arquivo.url) if request else primeira.arquivo.url
+
+    def get_distancia_km(self, obj):
+        distancia = getattr(obj, "distancia_m", None)
+        return round(distancia / 1000, 2) if distancia is not None else None
+
+    def get_visualizacoes(self, obj):
+        # O backend ainda não registra visualizações; null deixa o card sem o número.
+        return None
+
+    def get_vendedor_publico(self, obj):
+        from quero.reputacao.services import resumo_publico
+
+        return resumo_publico(obj.vendedor)
+
+
+class ContagemPorCategoriaSerializer(serializers.Serializer):
+    slug = serializers.CharField()
+    total = serializers.IntegerField()
+
+
+class FiltrosContagemSerializer(FiltrosBuscaSerializer):
+    """Os filtros do feed sem categoria nem ordenação: a contagem mostra quanto há em cada categoria."""
+
+    def filtros(self):
+        dados = super().filtros()
+        dados.pop("categoria", None)
+        dados.pop("ordenacao", None)
+        return dados
