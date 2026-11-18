@@ -84,7 +84,10 @@ class VitrineView(ListAPIView):
 
 
 class PropostaVitrineView(APIView):
-    """POST /api/v1/vitrine/<uuid:produto_id>/propostas — propõe um valor por um produto da vitrine e inicia negociação."""
+    """POST /api/v1/vitrine/<uuid:produto_id>/propostas.
+
+    Propõe um valor por um produto da vitrine e inicia negociação.
+    """
 
     permission_classes = [permissions.IsAuthenticated]
 
