@@ -532,11 +532,7 @@ def expirar_contrapropostas_vencidas(*, agora=None):
 @transaction.atomic
 def propor_compra_produto(*, comprador, produto_id, preco, mensagem=""):
     try:
-        produto = (
-            Produto.objects.select_for_update()
-            .select_related("vendedor", "categoria")
-            .get(pk=produto_id)
-        )
+        produto = Produto.objects.select_for_update().select_related("vendedor", "categoria").get(pk=produto_id)
     except Produto.DoesNotExist as exc:
         raise ValidationError("O produto não existe.") from exc
 
@@ -625,4 +621,3 @@ def propor_compra_produto(*, comprador, produto_id, preco, mensagem=""):
         )
 
     return oferta
-
