@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListAPIView
@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from quero.anuncios.views import AnuncioSerializer
 from quero.ofertas.models import BuscaSalva
+from quero.ofertas.services import propor_compra_produto
 
 from .paginacao import PaginacaoPorChave
 from .services import (
@@ -25,6 +26,7 @@ from .views import (
     FiltrosBuscaSerializer,
     FiltrosContagemSerializer,
     ProdutoDaVitrineSerializer,
+    PropostaVitrineSerializer,
 )
 
 
@@ -79,6 +81,40 @@ class VitrineView(ListAPIView):
             filtros.validated_data["ordenacao"],
         )
         return paginador.resposta(self.get_serializer(pagina, many=True).data)
+
+
+class PropostaVitrineView(APIView):
+    """POST /api/v1/vitrine/<uuid:produto_id>/propostas.
+
+    Propõe um valor por um produto da vitrine e inicia negociação.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, produto_id):
+        serializer = PropostaVitrineSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            oferta = propor_compra_produto(
+                comprador=request.user,
+                produto_id=produto_id,
+                preco=serializer.validated_data["preco"],
+                mensagem=serializer.validated_data.get("mensagem", ""),
+            )
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages if hasattr(exc, "messages") else str(exc)) from exc
+        return Response(
+            {
+                "id": str(oferta.id),
+                "oferta_id": str(oferta.id),
+                "anuncio_id": str(oferta.anuncio_id),
+                "produto_id": str(produto_id),
+                "preco_original": str(oferta.preco),
+                "preco_proposto": str(serializer.validated_data["preco"]),
+                "status": oferta.status,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class _ContagemPorCategoriaView(APIView):

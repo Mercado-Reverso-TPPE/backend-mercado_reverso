@@ -25,6 +25,7 @@ from quero.descoberta.controllers import (
     ContagemAnunciosPorCategoriaView,
     ContagemVitrinePorCategoriaView,
     EstatisticasView,
+    PropostaVitrineView,
     VitrineView,
 )
 from quero.descoberta.recomendacao_controllers import (
@@ -111,6 +112,11 @@ urlpatterns = [
     path("api/v1/anuncios/categorias", ContagemAnunciosPorCategoriaView.as_view(), name="anuncios-por-categoria"),
     path("api/v1/vitrine", VitrineView.as_view(), name="vitrine"),
     path("api/v1/vitrine/categorias", ContagemVitrinePorCategoriaView.as_view(), name="vitrine-por-categoria"),
+    path(
+        "api/v1/vitrine/<uuid:produto_id>/propostas",
+        PropostaVitrineView.as_view(),
+        name="proposta-vitrine",
+    ),
     path("api/v1/estatisticas", EstatisticasView.as_view(), name="estatisticas"),
     path("api/v1/anuncios/<uuid:anuncio_id>/ofertas", OfertasDoAnuncioView.as_view(), name="ofertas-do-anuncio"),
     path("api/v1/anuncios/<uuid:anuncio_id>/palpite", PalpiteAnuncioView.as_view(), name="palpite-anuncio"),
