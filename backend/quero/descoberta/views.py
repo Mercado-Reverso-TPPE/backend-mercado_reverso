@@ -159,3 +159,9 @@ class FiltrosContagemSerializer(FiltrosBuscaSerializer):
         dados.pop("categoria", None)
         dados.pop("ordenacao", None)
         return dados
+
+
+class PropostaVitrineSerializer(serializers.Serializer):
+    preco = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"))
+    mensagem = serializers.CharField(max_length=5000, required=False, allow_blank=True, default="")
+

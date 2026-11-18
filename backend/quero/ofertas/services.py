@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -526,3 +527,102 @@ def expirar_contrapropostas_vencidas(*, agora=None):
             if pending and _expire_counteroffer(oferta, pending, now=agora):
                 expiradas += 1
     return expiradas
+
+
+@transaction.atomic
+def propor_compra_produto(*, comprador, produto_id, preco, mensagem=""):
+    try:
+        produto = (
+            Produto.objects.select_for_update()
+            .select_related("vendedor", "categoria")
+            .get(pk=produto_id)
+        )
+    except Produto.DoesNotExist as exc:
+        raise ValidationError("O produto não existe.") from exc
+
+    if produto.status != Produto.Status.DISPONIVEL:
+        raise ValidationError("Só é possível propor valores para produtos disponíveis.")
+
+    if produto.vendedor_id == comprador.pk:
+        raise ValidationError("Você não pode enviar uma proposta para seu próprio produto.")
+
+    if bloqueio_entre(comprador.pk, produto.vendedor_id):
+        raise ValidationError("Não é possível enviar proposta: há um bloqueio entre você e o vendedor.")
+
+    ponto_comprador = comprador.ponto
+    if ponto_comprador is None:
+        raise ValidationError("Cadastre uma localização antes de enviar uma proposta.")
+
+    preco = Decimal(str(preco))
+    if preco <= Decimal("0.00"):
+        raise ValidationError("O valor da proposta deve ser maior que zero.")
+
+    oferta_existente = (
+        Oferta.objects.filter(
+            vendedor=produto.vendedor,
+            produto=produto,
+            anuncio__comprador=comprador,
+            status__in=(Oferta.Status.ENVIADA, Oferta.Status.EM_NEGOCIACAO),
+        )
+        .select_related("anuncio")
+        .first()
+    )
+    if oferta_existente:
+        return oferta_existente
+
+    anuncio = Anuncio.objects.create(
+        comprador=comprador,
+        categoria=produto.categoria,
+        titulo=f"Interesse em {produto.nome}",
+        descricao=produto.descricao or f"Proposta de compra para {produto.nome}.",
+        preco_min=min(preco, produto.preco),
+        preco_max=max(preco, produto.preco),
+        raio_m=50_000,
+        status=Anuncio.Status.ATIVO,
+    )
+
+    foto_snapshot = copiar_foto_para_snapshot(produto) if produto.fotos.exists() else ""
+    oferta = Oferta.objects.create(
+        anuncio=anuncio,
+        vendedor=produto.vendedor,
+        produto=produto,
+        nome_produto_snapshot=produto.nome,
+        foto_produto_snapshot=foto_snapshot,
+        descricao=produto.descricao,
+        estado_conservacao=produto.estado_conservacao,
+        preco=produto.preco,
+        status=Oferta.Status.EM_NEGOCIACAO,
+    )
+
+    EventoNegociacao.objects.create(
+        oferta=oferta,
+        autor=produto.vendedor,
+        preco=produto.preco,
+        status=oferta.status,
+        tipo_evento=EventoNegociacao.TipoEvento.ENVIADA,
+    )
+
+    if preco != produto.preco:
+        prazo_horas = getattr(settings, "CONTRAPROPOSTA_PRAZO_HORAS", 48)
+        EventoNegociacao.objects.create(
+            oferta=oferta,
+            autor=comprador,
+            preco=preco,
+            status=oferta.status,
+            tipo_evento=EventoNegociacao.TipoEvento.CONTRAPROPOSTA,
+            texto=mensagem,
+            rodada=1,
+            expira_em=timezone.now() + timedelta(hours=prazo_horas),
+            resultado=EventoNegociacao.Resultado.PENDENTE,
+        )
+    elif mensagem:
+        EventoNegociacao.objects.create(
+            oferta=oferta,
+            autor=comprador,
+            status=oferta.status,
+            tipo_evento=EventoNegociacao.TipoEvento.MENSAGEM,
+            texto=mensagem,
+        )
+
+    return oferta
+
