@@ -80,7 +80,7 @@ def solicitar_redefinicao_senha(email):
     )
 
     try:
-        send_mail("Redefinição de senha — Quero.", mensagem, settings.DEFAULT_FROM_EMAIL, [usuario.email])
+        send_mail("Redefinição de senha — quero.", mensagem, settings.DEFAULT_FROM_EMAIL, [usuario.email])
     except Exception:
         # A resposta HTTP permanece genérica para não revelar se a conta existe.
         logger.exception("Não foi possível enviar o e-mail de redefinição de senha.")
@@ -181,7 +181,7 @@ def solicitar_alteracao_email(*, usuario, novo_email):
     link = urlunsplit(partes_url._replace(query=urlencode(query)))
     try:
         enviados = send_mail(
-            "Confirme seu novo e-mail — Quero.",
+            "Confirme seu novo e-mail — quero.",
             f"Confirme a troca de e-mail pelo link abaixo. "
             f"Ele expira em {settings.EMAIL_CHANGE_TIMEOUT // 3600} horas:\n\n{link}",
             settings.DEFAULT_FROM_EMAIL,
