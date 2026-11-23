@@ -97,7 +97,13 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"anon": "30/hour", "user": "1000/day", "login": "5/minute"},
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "30/hour",
+        "user": "1000/day",
+        "login": "5/minute",
+        # Home pública: por IP, separado da cota anônima global.
+        "feed_publico": os.getenv("FEED_PUBLICO_THROTTLE", "60/min"),
+    },
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
@@ -108,6 +114,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 ]
+FEED_PUBLICO_CACHE_SEGUNDOS = int(os.getenv("FEED_PUBLICO_CACHE_SEGUNDOS", "60"))
 RAIO_PADRAO_KM = int(os.getenv("RAIO_PADRAO_KM", "20"))
 RAIO_MAXIMO_KM = int(os.getenv("RAIO_MAXIMO_KM", "200"))
 PESOS_RECOMENDACAO = {
