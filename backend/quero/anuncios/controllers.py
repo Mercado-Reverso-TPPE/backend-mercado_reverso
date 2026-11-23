@@ -7,6 +7,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import CursorPagination
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from quero.descoberta.paginacao import PaginacaoPorChave
 from quero.descoberta.services import anuncios_visiveis, buscar_anuncios
@@ -24,6 +25,9 @@ class AnuncioPagination(CursorPagination):
 
 class CategoriaListView(ListAPIView):
     permission_classes = [permissions.AllowAny]
+    # A home pública lista as categorias: mesmo limite das outras leituras abertas.
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "feed_publico"
     serializer_class = CategoriaSerializer
     queryset = Categoria.objects.filter(ativa=True)
 

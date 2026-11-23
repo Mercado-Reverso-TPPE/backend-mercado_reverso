@@ -5,15 +5,18 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import CursorPagination
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from quero.anuncios.views import AnuncioSerializer
 from quero.ofertas.models import BuscaSalva
 from quero.ofertas.services import propor_compra_produto
 
+from .cache import resposta_em_cache
 from .paginacao import PaginacaoPorChave
 from .services import (
     buscar_anuncios,
+    buscar_anuncios_publicos,
     buscar_produtos,
     contar_por_categoria,
     estatisticas_publicas,
@@ -21,10 +24,12 @@ from .services import (
     salvar_busca,
 )
 from .views import (
+    AnuncioPublicoSerializer,
     BuscaSalvaSerializer,
     ContagemPorCategoriaSerializer,
     FiltrosBuscaSerializer,
     FiltrosContagemSerializer,
+    FiltrosPublicosSerializer,
     ProdutoDaVitrineSerializer,
     PropostaVitrineSerializer,
 )
@@ -140,10 +145,54 @@ class ContagemVitrinePorCategoriaView(_ContagemPorCategoriaView):
     buscar = staticmethod(buscar_produtos)
 
 
-class EstatisticasView(APIView):
-    """GET /api/v1/estatisticas — números públicos do hero."""
+class _VisaoPublica(APIView):
+    """Base das leituras abertas a visitantes: sem sessão, com limite por IP e cache curto.
+
+    O limite é por escopo próprio (``feed_publico``) para que a home não esgote
+    a cota anônima global, que continua valendo para o resto da API.
+    """
 
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "feed_publico"
+
+
+class AnunciosPublicosView(_VisaoPublica):
+    """GET /api/v1/anuncios/publicos — home do visitante: "procura-se" ativos do Brasil inteiro ou de uma UF."""
+
+    def get(self, request):
+        def montar():
+            filtros = FiltrosPublicosSerializer(data=request.query_params)
+            filtros.is_valid(raise_exception=True)
+            paginador = PaginacaoPorChave()
+            pagina = paginador.paginar(
+                buscar_anuncios_publicos(**filtros.filtros()),
+                request,
+                filtros.validated_data["ordenacao"],
+            )
+            return paginador.resposta(AnuncioPublicoSerializer(pagina, many=True).data).data
+
+        return Response(resposta_em_cache("anuncios-publicos", request, montar))
+
+
+class ContagemAnunciosPublicosPorCategoriaView(_VisaoPublica):
+    """GET /api/v1/anuncios/publicos/categorias — ``[{slug, total}]`` da home pública, sem a categoria escolhida."""
+
+    def get(self, request):
+        def montar():
+            filtros = FiltrosPublicosSerializer(data=request.query_params)
+            filtros.is_valid(raise_exception=True)
+            dados = filtros.filtros(com_ordenacao=False)
+            dados.pop("categoria", None)
+            contagem = contar_por_categoria(buscar_anuncios_publicos(**dados))
+            return ContagemPorCategoriaSerializer(contagem, many=True).data
+
+        return Response(resposta_em_cache("anuncios-publicos-categorias", request, montar))
+
+
+class EstatisticasView(_VisaoPublica):
+    """GET /api/v1/estatisticas — números públicos do hero."""
 
     def get(self, request):
         return Response(estatisticas_publicas())

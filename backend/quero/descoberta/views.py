@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from rest_framework import serializers
 
-from quero.anuncios.models import Categoria
+from quero.anuncios.models import Anuncio, Categoria
 from quero.ofertas.models import BuscaSalva
 
 from .models import Recomendacao
@@ -39,6 +39,62 @@ class FiltrosBuscaSerializer(serializers.Serializer):
         dados = dict(self.validated_data)
         dados["termo"] = dados.pop("q")
         return dados
+
+
+UFS = (
+    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA",
+    "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
+)  # fmt: skip
+
+ORDENACOES_PUBLICAS = tuple(
+    (valor, rotulo) for valor, rotulo in BuscaSalva.Ordenacao.choices if valor != BuscaSalva.Ordenacao.DISTANCIA
+)
+
+
+class FiltrosPublicosSerializer(serializers.Serializer):
+    """Filtros da home pública: os do feed menos a distância, mais a UF (sem UF, o Brasil inteiro)."""
+
+    q = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
+    uf = serializers.ChoiceField(choices=UFS, required=False, allow_blank=True, default="")
+    categoria = serializers.SlugRelatedField(
+        slug_field="slug", queryset=Categoria.objects.filter(ativa=True), required=False
+    )
+    preco_min = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False)
+    preco_max = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False)
+    ordenacao = serializers.ChoiceField(choices=ORDENACOES_PUBLICAS, default=BuscaSalva.Ordenacao.RECENTES)
+
+    def to_internal_value(self, data):
+        # Aceita "sp" na URL, mas guarda sempre a sigla em maiúsculas.
+        if hasattr(data, "get") and data.get("uf"):
+            data = data.copy()
+            data["uf"] = str(data["uf"]).upper()
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        return validar_faixa_de_preco(attrs)
+
+    def filtros(self, *, com_ordenacao=True):
+        dados = dict(self.validated_data)
+        dados["termo"] = dados.pop("q")
+        if not com_ordenacao:
+            dados.pop("ordenacao")
+        return dados
+
+
+class AnuncioPublicoSerializer(serializers.ModelSerializer):
+    """O que um visitante pode ver de um anúncio: só o que o card mostra.
+
+    Lista fechada de campos. Nada do comprador, da localização exata, do raio,
+    da descrição, das ofertas ou dos palpites.
+    """
+
+    categoria = serializers.SlugRelatedField(slug_field="slug", read_only=True)
+    categoria_nome = serializers.CharField(source="categoria.nome", read_only=True)
+
+    class Meta:
+        model = Anuncio
+        fields = ("id", "titulo", "categoria", "categoria_nome", "preco_min", "preco_max", "cidade", "uf", "criado_em")
+        read_only_fields = fields
 
 
 class BuscaSalvaSerializer(serializers.ModelSerializer):

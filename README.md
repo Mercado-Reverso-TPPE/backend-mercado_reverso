@@ -58,6 +58,8 @@ Todas as rotas abaixo usam o prefixo `/api/v1`.
 | POST | `/perfil/email` | Solicitar troca de e-mail |
 | POST | `/perfil/email/confirmar` | Confirmar troca usando token recebido por e-mail |
 | GET | `/categorias` | Listar categorias ativas |
+| GET | `/anuncios/publicos` | Home pública, sem sessão: "procura-se" ativos do Brasil inteiro ou de uma UF (`?uf=SP`), com `q`, `categoria`, `preco_min`, `preco_max` e `ordenacao` (recentes ou preço). Só os campos do card; limite `FEED_PUBLICO_THROTTLE` por IP e cache de `FEED_PUBLICO_CACHE_SEGUNDOS` |
+| GET | `/anuncios/publicos/categorias` | Contagem por categoria da home pública, com os mesmos filtros |
 | GET / POST | `/anuncios` | Buscar no feed geográfico (ver [Busca](#busca-de-anúncios)) / criar anúncio de procura |
 | GET | `/anuncios/meus` | Listar anúncios próprios |
 | GET / PATCH | `/anuncios/{id}` | Consultar/editar anúncio próprio |

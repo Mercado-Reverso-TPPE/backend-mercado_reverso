@@ -21,8 +21,10 @@ from quero.contas.controllers import (
 )
 from quero.contas.views import LoginSerializer
 from quero.descoberta.controllers import (
+    AnunciosPublicosView,
     BuscaSalvaViewSet,
     ContagemAnunciosPorCategoriaView,
+    ContagemAnunciosPublicosPorCategoriaView,
     ContagemVitrinePorCategoriaView,
     EstatisticasView,
     PropostaVitrineView,
@@ -110,6 +112,12 @@ urlpatterns = [
     path("api/v1/categorias", CategoriaListView.as_view(), name="categorias"),
     # Antes do router, para "categorias" não ser lido como o id de um anúncio.
     path("api/v1/anuncios/categorias", ContagemAnunciosPorCategoriaView.as_view(), name="anuncios-por-categoria"),
+    path("api/v1/anuncios/publicos", AnunciosPublicosView.as_view(), name="anuncios-publicos"),
+    path(
+        "api/v1/anuncios/publicos/categorias",
+        ContagemAnunciosPublicosPorCategoriaView.as_view(),
+        name="anuncios-publicos-por-categoria",
+    ),
     path("api/v1/vitrine", VitrineView.as_view(), name="vitrine"),
     path("api/v1/vitrine/categorias", ContagemVitrinePorCategoriaView.as_view(), name="vitrine-por-categoria"),
     path(

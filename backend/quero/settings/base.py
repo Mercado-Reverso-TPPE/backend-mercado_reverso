@@ -97,7 +97,13 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"anon": "30/hour", "user": "1000/day", "login": "5/minute"},
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "30/hour",
+        "user": "1000/day",
+        "login": "5/minute",
+        # Home pública: por IP, separado da cota anônima global.
+        "feed_publico": os.getenv("FEED_PUBLICO_THROTTLE", "60/min"),
+    },
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
@@ -108,6 +114,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 ]
+FEED_PUBLICO_CACHE_SEGUNDOS = int(os.getenv("FEED_PUBLICO_CACHE_SEGUNDOS", "60"))
 RAIO_PADRAO_KM = int(os.getenv("RAIO_PADRAO_KM", "20"))
 RAIO_MAXIMO_KM = int(os.getenv("RAIO_MAXIMO_KM", "200"))
 PESOS_RECOMENDACAO = {
@@ -132,7 +139,7 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "false").lower() == "true"
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Quero. <nao-responda@quero.local>")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "quero. <nao-responda@quero.local>")
 MEDIA_URL = os.getenv("MEDIA_URL", "media/")
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT") or BASE_DIR / "media")
 PRODUTO_FOTOS_MAXIMO = int(os.getenv("PRODUTO_FOTOS_MAXIMO", "6"))
