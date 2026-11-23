@@ -43,6 +43,9 @@ class Anuncio(models.Model):
     recomendacoes_tentativas = models.PositiveIntegerField(default=0)
     recomendacoes_ultimo_erro = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ATIVO)
+    # Cópia da cidade/UF do comprador: permite filtrar a listagem pública sem expor a localização dele.
+    cidade = models.CharField(max_length=120, blank=True, editable=False)
+    uf = models.CharField(max_length=2, blank=True, editable=False)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -51,6 +54,7 @@ class Anuncio(models.Model):
         indexes = [
             GistIndex(fields=["alcance"], name="anuncio_alcance_gist"),
             models.Index(fields=["status", "categoria"], name="anuncio_status_categoria"),
+            models.Index(fields=["status", "uf"], name="anuncio_status_uf"),
         ]
 
     def clean(self):
@@ -60,6 +64,11 @@ class Anuncio(models.Model):
     def save(self, *args, **kwargs):
         if not self.raio_m or self.raio_m > getattr(settings, "RAIO_MAXIMO_KM", 200) * 1000:
             raise ValidationError({"raio_m": "O raio informado está fora do limite permitido."})
+        if self.comprador_id:
+            self.cidade = self.comprador.cidade
+            self.uf = self.comprador.uf
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "cidade", "uf"}
         self.full_clean()
         super().save(*args, **kwargs)
         # The reach polygon is a spatially indexed materialization of buyer location and radius.
